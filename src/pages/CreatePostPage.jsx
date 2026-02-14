@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ImagePlus, X, ArrowLeft, UserPlus, Search, User } from 'lucide-react';
+import { ImagePlus, X, ArrowLeft, UserPlus, Search, User, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { compressImage } from '@/lib/imageUtils';
 import { db, collection, addDoc, serverTimestamp } from '@/lib/firebase';
@@ -28,6 +28,12 @@ export default function CreatePostPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [searching, setSearching] = useState(false);
+
+    // Poll State
+    const [showPoll, setShowPoll] = useState(false);
+    const [pollQuestion, setPollQuestion] = useState('');
+    const [pollOptions, setPollOptions] = useState(['', '']);
+    const [pollDuration, setPollDuration] = useState(null); // null = no limit, or hours
 
     const fileInputRef = useRef(null);
 
@@ -114,8 +120,33 @@ export default function CreatePostPage() {
         await handleFile(file);
     };
 
+    // Poll Helper Functions
+    const addPollOption = () => {
+        if (pollOptions.length < 4) {
+            setPollOptions([...pollOptions, '']);
+        }
+    };
+
+    const removePollOption = (index) => {
+        if (pollOptions.length > 2) {
+            setPollOptions(pollOptions.filter((_, i) => i !== index));
+        }
+    };
+
+    const updatePollOption = (index, value) => {
+        const newOptions = [...pollOptions];
+        newOptions[index] = value;
+        setPollOptions(newOptions);
+    };
+
     const handleSubmit = async () => {
-        if (!image || !currentUser) return;
+        // Validate: need either image or poll
+        if (!image && !showPoll) return;
+        if (showPoll && (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2)) {
+            setError('La encuesta necesita una pregunta y al menos 2 opciones');
+            return;
+        }
+        if (!currentUser) return;
         setLoading(true);
         setError('');
 
@@ -125,19 +156,37 @@ export default function CreatePostPage() {
                 throw new Error("Perfil de usuario no cargado. Intentá recargar la página.");
             }
 
-            await addDoc(collection(db, 'posts'), {
+            const postData = {
                 userId: currentUser.uid,
                 user: {
                     username: userProfile.username || 'usuario',
                     avatar: userProfile.avatarUrl || '',
                 },
-                image: image,
+                image: image || null,
                 caption: caption,
                 likes: 0,
                 comments: [],
                 createdAt: serverTimestamp(),
-                taggedUsers: taggedUsers.map(t => ({ uid: t.uid, username: t.username, x: 0.5, y: 0.5 })) // simplified
-            });
+                taggedUsers: taggedUsers.map(t => ({ uid: t.uid, username: t.username, x: 0.5, y: 0.5 }))
+            };
+
+            // Add poll data if poll is enabled
+            if (showPoll && pollQuestion.trim()) {
+                const validOptions = pollOptions.filter(o => o.trim());
+                postData.poll = {
+                    question: pollQuestion.trim(),
+                    options: validOptions.map((text, index) => ({
+                        id: `opt_${index}_${Date.now()}`,
+                        text: text.trim(),
+                        votes: 0
+                    })),
+                    voters: {},
+                    duration: pollDuration,
+                    endsAt: pollDuration ? new Date(Date.now() + pollDuration * 60 * 60 * 1000) : null
+                };
+            }
+
+            await addDoc(collection(db, 'posts'), postData);
             navigate('/');
         } catch (error) {
             console.error("Error creating post:", error);
@@ -156,7 +205,7 @@ export default function CreatePostPage() {
                 <h1 className="text-lg font-semibold">Nueva publicación</h1>
                 <Button
                     onClick={handleSubmit}
-                    disabled={!image || loading}
+                    disabled={(!image && !showPoll) || loading}
                     className="text-papu-coral hover:text-papu-coral/80 font-semibold"
                     variant="ghost"
                 >
@@ -299,6 +348,95 @@ export default function CreatePostPage() {
                                                     ))}
                                                 </div>
                                             )}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* Poll Section */}
+                        <div className="border-t border-border pt-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <Button
+                                    variant="ghost"
+                                    className="p-0 h-auto font-semibold text-sm hover:bg-transparent"
+                                    onClick={() => setShowPoll(!showPoll)}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <BarChart3 className="h-5 w-5" />
+                                        <span>Agregar encuesta</span>
+                                    </div>
+                                </Button>
+                            </div>
+
+                            <AnimatePresence>
+                                {showPoll && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="space-y-3 pt-3">
+                                            {/* Poll Question */}
+                                            <Input
+                                                placeholder="Pregunta de la encuesta..."
+                                                value={pollQuestion}
+                                                onChange={(e) => setPollQuestion(e.target.value)}
+                                                className="font-medium"
+                                            />
+
+                                            {/* Poll Options */}
+                                            <div className="space-y-2">
+                                                {pollOptions.map((option, index) => (
+                                                    <div key={index} className="flex gap-2">
+                                                        <Input
+                                                            placeholder={`Opción ${index + 1}`}
+                                                            value={option}
+                                                            onChange={(e) => updatePollOption(index, e.target.value)}
+                                                            className="flex-1"
+                                                        />
+                                                        {pollOptions.length > 2 && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => removePollOption(index)}
+                                                                className="shrink-0"
+                                                            >
+                                                                <X className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Add Option Button */}
+                                            {pollOptions.length < 4 && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={addPollOption}
+                                                    className="w-full"
+                                                >
+                                                    + Agregar opción
+                                                </Button>
+                                            )}
+
+                                            {/* Duration Selector */}
+                                            <div className="flex items-center gap-2 text-sm">
+                                                <span className="text-muted-foreground">Duración:</span>
+                                                <select
+                                                    value={pollDuration || ''}
+                                                    onChange={(e) => setPollDuration(e.target.value ? parseInt(e.target.value) : null)}
+                                                    className="bg-secondary border border-border rounded-md px-2 py-1 text-sm"
+                                                >
+                                                    <option value="">Sin límite</option>
+                                                    <option value="24">1 día</option>
+                                                    <option value="72">3 días</option>
+                                                    <option value="168">7 días</option>
+                                                </select>
+                                            </div>
                                         </div>
                                     </motion.div>
                                 )}

@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { MessageCircle, Send, Bookmark, MoreHorizontal, Heart, User } from 'lucide-react';
+import { MessageCircle, Send, Bookmark, MoreHorizontal, Heart, User, BarChart3 } from 'lucide-react';
 import LikeButton from './LikeButton';
+import PollOption from './PollOption';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -223,6 +224,55 @@ export default function PostCard({ post }) {
         }
     };
 
+    const handleVote = async (optionId) => {
+        if (!currentUser || !post.poll) return;
+
+        const postRef = doc(db, 'posts', post.id);
+        const currentVote = post.poll.voters?.[currentUser.uid];
+
+        // If clicking the same option they already voted for, do nothing
+        if (currentVote === optionId) return;
+
+        try {
+            const updatedPoll = { ...post.poll };
+            if (!updatedPoll.voters) updatedPoll.voters = {};
+
+            // If changing vote, decrement old option
+            if (currentVote) {
+                const oldOptIndex = updatedPoll.options.findIndex(o => o.id === currentVote);
+                if (oldOptIndex !== -1) {
+                    updatedPoll.options[oldOptIndex].votes = Math.max(0, (updatedPoll.options[oldOptIndex].votes || 0) - 1);
+                }
+            }
+
+            // Increment new option
+            const newOptIndex = updatedPoll.options.findIndex(o => o.id === optionId);
+            if (newOptIndex !== -1) {
+                updatedPoll.options[newOptIndex].votes = (updatedPoll.options[newOptIndex].votes || 0) + 1;
+            }
+
+            // Update voter record
+            updatedPoll.voters[currentUser.uid] = optionId;
+
+            await updateDoc(postRef, {
+                poll: updatedPoll
+            });
+
+            // Create notification for post owner (optional but nice)
+            if (post.userId !== currentUser.uid) {
+                await createNotification(
+                    post.userId,
+                    currentUser.uid,
+                    'vote',
+                    post.id,
+                    post.image || null
+                );
+            }
+        } catch (error) {
+            console.error("Error voting:", error);
+        }
+    };
+
     // Search Users for Share
     useEffect(() => {
         if (!showShareDialog) return;
@@ -323,84 +373,126 @@ export default function PostCard({ post }) {
             </div>
 
             {/* Image */}
-            <div
-                className="relative aspect-square bg-secondary cursor-pointer overflow-hidden"
-                onClick={handleDoubleTap}
-            >
-                <motion.img
-                    src={post.image}
-                    alt={post.caption}
-                    className="w-full h-full object-cover"
-                    initial={{ opacity: 0, scale: 1.05 }}
-                    animate={imageLoaded ? { opacity: 1, scale: 1 } : {}}
-                    transition={{ duration: 0.6, ease: 'easeOut' }}
-                    onLoad={() => setImageLoaded(true)}
-                />
+            {post.image ? (
+                <div
+                    className="relative aspect-square bg-secondary cursor-pointer overflow-hidden"
+                    onClick={handleDoubleTap}
+                >
+                    <motion.img
+                        src={post.image}
+                        alt={post.caption}
+                        className="w-full h-full object-cover"
+                        initial={{ opacity: 0, scale: 1.05 }}
+                        animate={imageLoaded ? { opacity: 1, scale: 1 } : {}}
+                        transition={{ duration: 0.6, ease: 'easeOut' }}
+                        onLoad={() => setImageLoaded(true)}
+                    />
 
-                {/* Floating heart on double tap */}
-                <AnimatePresence>
-                    {showFloatingHeart && (
-                        <motion.div
-                            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.3 }}
-                        >
+                    {/* Floating heart on double tap */}
+                    <AnimatePresence>
+                        {showFloatingHeart && (
                             <motion.div
-                                initial={{ scale: 0, rotate: -15 }}
-                                animate={{ scale: [0, 1.4, 1.1], rotate: [0, 10, 0] }}
-                                exit={{ scale: 0, opacity: 0 }}
-                                transition={{ duration: 0.6, ease: 'easeOut' }}
+                                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.3 }}
                             >
-                                <Heart className="h-24 w-24 text-white fill-white drop-shadow-lg" strokeWidth={0} />
+                                <motion.div
+                                    initial={{ scale: 0, rotate: -15 }}
+                                    animate={{ scale: [0, 1.4, 1.1], rotate: [0, 10, 0] }}
+                                    exit={{ scale: 0, opacity: 0 }}
+                                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                                >
+                                    <Heart className="h-24 w-24 text-white fill-white drop-shadow-lg" strokeWidth={0} />
+                                </motion.div>
                             </motion.div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                        )}
+                    </AnimatePresence>
 
-                {/* Tags Overlay Logic */}
-                {post.taggedUsers && post.taggedUsers.length > 0 && (
-                    <div className="absolute bottom-4 left-4 z-10">
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setShowTags(!showTags); }}
-                            className="bg-black/60 p-1.5 rounded-full text-white/90 hover:bg-black/80 transition-colors"
-                        >
-                            <User className="w-4 h-4" />
-                        </button>
-                    </div>
-                )}
-
-                <AnimatePresence>
-                    {showTags && post.taggedUsers && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-black/40 z-20 flex items-center justify-center pointer-events-none"
-                        >
-                            <div className="flex flex-wrap gap-2 justify-center p-8 pointer-events-auto">
-                                {post.taggedUsers.map(tag => (
-                                    <Link
-                                        to={`/profile/${tag.username}`}
-                                        key={tag.uid}
-                                        className="bg-white/90 text-black text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg hover:bg-white hover:scale-105 transition-all flex items-center gap-1"
-                                    >
-                                        <User className="w-3 h-3" />
-                                        {tag.username}
-                                    </Link>
-                                ))}
-                            </div>
+                    {/* Tags Overlay Logic */}
+                    {post.taggedUsers && post.taggedUsers.length > 0 && (
+                        <div className="absolute bottom-4 left-4 z-10">
                             <button
-                                onClick={() => setShowTags(false)}
-                                className="absolute top-2 right-2 text-white/80 hover:text-white pointer-events-auto p-2"
+                                onClick={(e) => { e.stopPropagation(); setShowTags(!showTags); }}
+                                className="bg-black/60 p-1.5 rounded-full text-white/90 hover:bg-black/80 transition-colors"
                             >
-                                <X className="w-6 h-6" />
+                                <User className="w-4 h-4" />
                             </button>
-                        </motion.div>
+                        </div>
                     )}
-                </AnimatePresence>
-            </div>
+
+                    <AnimatePresence>
+                        {showTags && post.taggedUsers && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 bg-black/40 z-20 flex items-center justify-center pointer-events-none"
+                            >
+                                <div className="flex flex-wrap gap-2 justify-center p-8 pointer-events-auto">
+                                    {post.taggedUsers.map(tag => (
+                                        <Link
+                                            to={`/profile/${tag.username}`}
+                                            key={tag.uid}
+                                            className="bg-white/90 text-black text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg hover:bg-white hover:scale-105 transition-all flex items-center gap-1"
+                                        >
+                                            <User className="w-3 h-3" />
+                                            {tag.username}
+                                        </Link>
+                                    ))}
+                                </div>
+                                <button
+                                    onClick={() => setShowTags(false)}
+                                    className="absolute top-2 right-2 text-white/80 hover:text-white pointer-events-auto p-2"
+                                >
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            ) : post.poll && (
+                /* Header background for text-only poll posts */
+                <div className="w-full h-32 bg-gradient-to-br from-papu-coral/5 to-orange-500/5 dark:from-papu-coral/10 dark:to-orange-500/10 flex items-center justify-center overflow-hidden relative">
+                    <BarChart3 className="absolute -bottom-4 -right-4 h-32 w-32 text-papu-coral/10 rotate-12" />
+                </div>
+            )}
+
+            {/* Poll Section */}
+            {post.poll && (
+                <div className={`px-5 py-5 ${post.image ? 'border-t border-border/10 bg-secondary/5 dark:bg-white/5' : ''}`}>
+                    <h3 className="text-[17px] font-extrabold mb-5 tracking-tight leading-tight">
+                        {post.poll.question}
+                    </h3>
+                    <div className="space-y-2.5">
+                        {post.poll.options.map((option) => (
+                            <PollOption
+                                key={option.id}
+                                option={option}
+                                totalVotes={Object.keys(post.poll.voters || {}).length}
+                                isSelected={post.poll.voters?.[currentUser?.uid] === option.id}
+                                hasVoted={!!post.poll.voters?.[currentUser?.uid]}
+                                onVote={handleVote}
+                                disabled={post.poll.endsAt && new Date(post.poll.endsAt) < new Date()}
+                            />
+                        ))}
+                    </div>
+                    <div className="mt-5 flex items-center justify-between text-[11px] text-muted-foreground font-bold uppercase tracking-wider">
+                        <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-papu-coral" />
+                            <span>{Object.keys(post.poll.voters || {}).length} votos</span>
+                        </div>
+                        {post.poll.endsAt && (
+                            <span className="opacity-70">
+                                {new Date(post.poll.endsAt.seconds * 1000) < new Date()
+                                    ? 'Finalizada'
+                                    : `Termina el ${new Date(post.poll.endsAt.seconds * 1000).toLocaleDateString()}`}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Actions */}
             <div className="px-3.5 pt-3">
