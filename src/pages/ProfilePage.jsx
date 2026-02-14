@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Settings, Grid, Bookmark, Users, MoreHorizontal, Trash2, Heart, X, Plus } from 'lucide-react';
 import StoryViewer from '@/components/stories/StoryViewer';
-import { collection, query, where, getDocs, db, doc, getDoc, orderBy } from '@/lib/firebase';
+import { collection, query, where, getDocs, db, doc, getDoc, orderBy, limit } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useFollow } from '@/hooks/useFollow';
 import { Button } from '@/components/ui/button';

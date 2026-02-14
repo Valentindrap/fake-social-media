@@ -50,7 +50,7 @@ export default function StoriesBar() {
                     const userData = { id: userDoc.id, ...userDoc.data() };
                     // Check for stories in last 24h
                     const storiesQ = query(
-                        collection(db, 'users', userData.uid, 'stories'),
+                        collection(db, 'users', userData.id, 'stories'),
                         orderBy('createdAt', 'desc'),
                         limit(1)
                     );
