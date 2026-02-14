@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -51,224 +51,36 @@ const ChatListItem = ({ chat, currentUser, selectedChat, setSelectedChat }) => {
     );
 };
 
-export default function MessagesPage() {
-    const { currentUser, userProfile } = useAuth();
-    const [searchParams] = useSearchParams();
-    const targetUserId = searchParams.get('userId');
-
-    const [chats, setChats] = useState([]);
-    const [selectedChat, setSelectedChat] = useState(null);
-    const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState('');
-    const [selectedImage, setSelectedImage] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [sending, setSending] = useState(false);
-
-    // Live user data for current chat
-    const [otherUserProfile, setOtherUserProfile] = useState(null);
-
-    // Responsive state
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
-    const messagesEndRef = useRef(null);
-    const fileInputRef = useRef(null);
-
-    // Handle Resize
+// Extracted ChatContent Component
+const ChatContent = memo(({
+    isMobile,
+    selectedChat,
+    setSelectedChat,
+    otherUserProfile,
+    messages,
+    currentUser,
+    messagesEndRef,
+    selectedImage,
+    setSelectedImage,
+    handleSendMessage,
+    fileInputRef,
+    handleImageSelect,
+    newMessage,
+    setNewMessage,
+    sending,
+    scrollToBottom
+}) => {
+    // Scroll to bottom on mount (instant)
     useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < 768);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+        scrollToBottom(false);
+        // Slight delay to ensure layout is ready (critical for mobile)
+        setTimeout(() => scrollToBottom(false), 100);
+    }, [scrollToBottom]);
 
-    // 1. Fetch User's Chats
-    useEffect(() => {
-        if (!currentUser) return;
-
-        const q = query(
-            collection(db, 'chats'),
-            where('participants', 'array-contains', currentUser.uid)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const chatList = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                // Keep initial otherUser from chat doc as fallback/initial state
-                otherUser: doc.data().userDetails?.[doc.data().participants.find(p => p !== currentUser.uid)]
-            }));
-            // Sort by updatedAt desc
-            chatList.sort((a, b) => {
-                const dateA = a.updatedAt?.toDate() || new Date(0);
-                const dateB = b.updatedAt?.toDate() || new Date(0);
-                return dateB - dateA;
-            });
-            setChats(chatList);
-            setLoading(false);
-        });
-
-        return unsubscribe;
-    }, [currentUser]);
-
-    // 2. Handle Target User (from Profile "Message" button)
-    useEffect(() => {
-        async function checkOrCreateChat() {
-            if (!currentUser || !targetUserId) return;
-
-            // Check if chat already exists
-            const existingChat = chats.find(c => c.participants.includes(targetUserId));
-            if (existingChat) {
-                setSelectedChat(existingChat);
-                return;
-            }
-
-            try {
-                const targetUserDoc = await getDoc(doc(db, 'users', targetUserId));
-                if (!targetUserDoc.exists()) return;
-                const targetUserData = targetUserDoc.data();
-
-                const chatId = [currentUser.uid, targetUserId].sort().join('_');
-                const chatDocRef = doc(db, 'chats', chatId);
-
-                const chatData = {
-                    participants: [currentUser.uid, targetUserId],
-                    userDetails: {
-                        [currentUser.uid]: {
-                            username: userProfile.username,
-                            avatarUrl: userProfile.avatarUrl
-                        },
-                        [targetUserId]: {
-                            username: targetUserData.username,
-                            avatarUrl: targetUserData.avatarUrl
-                        }
-                    },
-                    updatedAt: serverTimestamp()
-                };
-
-                await setDoc(chatDocRef, chatData, { merge: true });
-                setSelectedChat({ id: chatId, ...chatData, otherUser: targetUserData });
-
-            } catch (error) {
-                console.error("Error creating chat:", error);
-            }
-        }
-
-        if (targetUserId && !selectedChat) {
-            checkOrCreateChat();
-        }
-    }, [targetUserId, currentUser, chats, userProfile]);
-
-    // 3. Live User Profile Sync for Active Chat
-    useEffect(() => {
-        if (!selectedChat || !currentUser) {
-            setOtherUserProfile(null);
-            return;
-        }
-
-        const otherUserId = selectedChat.participants.find(p => p !== currentUser.uid);
-        if (!otherUserId) return;
-
-        // Set initial from chat data to avoid flicker
-        setOtherUserProfile(selectedChat.otherUser);
-
-        // Listen to the user document directly
-        const unsub = onSnapshot(doc(db, 'users', otherUserId), (docSnap) => {
-            if (docSnap.exists()) {
-                setOtherUserProfile(docSnap.data());
-            }
-        });
-        return unsub;
-    }, [selectedChat?.id, currentUser]);
-
-
-    // 4. Fetch Messages & Update Read Status
-    useEffect(() => {
-        if (!selectedChat || !currentUser) return;
-
-        // Mark as read immediately when entering chat
-        const markAsRead = async () => {
-            const chatRef = doc(db, 'chats', selectedChat.id);
-            await setDoc(chatRef, {
-                lastRead: {
-                    [currentUser.uid]: serverTimestamp()
-                }
-            }, { merge: true });
-        };
-        markAsRead();
-
-        const q = query(
-            collection(db, 'chats', selectedChat.id, 'messages'),
-            orderBy('createdAt', 'asc')
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setMessages(msgs);
-            setTimeout(scrollToBottom, 100);
-
-            // Also mark as read if new messages arrive while open
-            markAsRead();
-        });
-
-        return unsubscribe;
-    }, [selectedChat, currentUser]);
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
-    const handleImageSelect = async (e) => {
-        const file = e.target.files?.[0];
-        if (file && file.type.startsWith('image/')) {
-            try {
-                const compressed = await compressImage(file, 800, 0.7);
-                setSelectedImage(compressed);
-            } catch (error) {
-                console.error("Error processing image:", error);
-            }
-        }
-    };
-
-    const handleSendMessage = async (e) => {
-        e.preventDefault();
-        if ((!newMessage.trim() && !selectedImage) || !currentUser || !selectedChat) return;
-
-        setSending(true);
-        const msgText = newMessage.trim();
-        const msgImage = selectedImage;
-
-        // Reset inputs immediately (optimistic UI)
-        setNewMessage('');
-        setSelectedImage(null);
-
-        try {
-            // Add message
-            await addDoc(collection(db, 'chats', selectedChat.id, 'messages'), {
-                text: msgText,
-                image: msgImage,
-                senderId: currentUser.uid,
-                createdAt: serverTimestamp()
-            });
-
-            // Update chat last message
-            await setDoc(doc(db, 'chats', selectedChat.id), {
-                lastMessage: {
-                    text: msgImage ? '📷 Imagen' : msgText,
-                    senderId: currentUser.uid,
-                    createdAt: serverTimestamp()
-                },
-                updatedAt: serverTimestamp()
-            }, { merge: true });
-
-        } catch (error) {
-            console.error("Error sending message:", error);
-        } finally {
-            setSending(false);
-        }
-    };
-
-    // Chat Content Component (Rendered either inline or in portal)
-    const ChatContent = () => (
-        <div className={`flex flex-col w-full h-full bg-background ${isMobile ? 'fixed inset-0 z-[99999]' : ''}`}>
+    return (
+        <div
+            className="flex flex-col w-full h-full bg-background"
+        >
             {/* Header */}
             <div className="h-[60px] border-b border-border flex items-center px-4 gap-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
                 <Button
@@ -415,12 +227,245 @@ export default function MessagesPage() {
             </form>
         </div>
     );
+});
+
+export default function MessagesPage() {
+    const { currentUser, userProfile } = useAuth();
+    const [searchParams] = useSearchParams();
+    const targetUserId = searchParams.get('userId');
+
+    const [chats, setChats] = useState([]);
+    const [selectedChat, setSelectedChat] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
+    const [selectedImage, setSelectedImage] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [sending, setSending] = useState(false);
+
+    // Live user data for current chat
+    const [otherUserProfile, setOtherUserProfile] = useState(null);
+
+    // Responsive state
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    const messagesEndRef = useRef(null);
+    const fileInputRef = useRef(null);
+
+    // Handle Resize
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Handle Keyboard (Mobile)
+    useEffect(() => {
+        if (!isMobile) return;
+
+        const handleViewportResize = () => {
+            if (window.visualViewport) {
+                const viewportHeight = window.visualViewport.height;
+                const windowHeight = window.innerHeight;
+                const diff = windowHeight - viewportHeight;
+                setKeyboardHeight(diff > 0 ? diff : 0);
+            }
+        };
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleViewportResize);
+            window.visualViewport.addEventListener('scroll', handleViewportResize);
+            handleViewportResize();
+        }
+
+        return () => {
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', handleViewportResize);
+                window.visualViewport.removeEventListener('scroll', handleViewportResize);
+            }
+        };
+    }, [isMobile]);
+
+    // 1. Fetch User's Chats
+    useEffect(() => {
+        if (!currentUser) return;
+
+        const q = query(
+            collection(db, 'chats'),
+            where('participants', 'array-contains', currentUser.uid)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const chatList = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                // Keep initial otherUser from chat doc as fallback/initial state
+                otherUser: doc.data().userDetails?.[doc.data().participants.find(p => p !== currentUser.uid)]
+            }));
+            // Sort by updatedAt desc
+            chatList.sort((a, b) => {
+                const dateA = a.updatedAt?.toDate() || new Date(0);
+                const dateB = b.updatedAt?.toDate() || new Date(0);
+                return dateB - dateA;
+            });
+            setChats(chatList);
+            setLoading(false);
+        });
+
+        return unsubscribe;
+    }, [currentUser]);
+
+    // 2. Handle Target User
+    useEffect(() => {
+        async function checkOrCreateChat() {
+            if (!currentUser || !targetUserId) return;
+
+            const existingChat = chats.find(c => c.participants.includes(targetUserId));
+            if (existingChat) {
+                setSelectedChat(existingChat);
+                return;
+            }
+
+            try {
+                const targetUserDoc = await getDoc(doc(db, 'users', targetUserId));
+                if (!targetUserDoc.exists()) return;
+                const targetUserData = targetUserDoc.data();
+
+                const chatId = [currentUser.uid, targetUserId].sort().join('_');
+                const chatDocRef = doc(db, 'chats', chatId);
+
+                const chatData = {
+                    participants: [currentUser.uid, targetUserId],
+                    userDetails: {
+                        [currentUser.uid]: {
+                            username: userProfile.username,
+                            avatarUrl: userProfile.avatarUrl
+                        },
+                        [targetUserId]: {
+                            username: targetUserData.username,
+                            avatarUrl: targetUserData.avatarUrl
+                        }
+                    },
+                    updatedAt: serverTimestamp()
+                };
+
+                await setDoc(chatDocRef, chatData, { merge: true });
+                setSelectedChat({ id: chatId, ...chatData, otherUser: targetUserData });
+
+            } catch (error) {
+                console.error("Error creating chat:", error);
+            }
+        }
+
+        if (targetUserId && !selectedChat) {
+            checkOrCreateChat();
+        }
+    }, [targetUserId, currentUser, chats, userProfile]);
+
+    // 3. Live User Profile Sync
+    useEffect(() => {
+        if (!selectedChat || !currentUser) {
+            setOtherUserProfile(null);
+            return;
+        }
+
+        const otherUserId = selectedChat.participants.find(p => p !== currentUser.uid);
+        if (!otherUserId) return;
+
+        setOtherUserProfile(selectedChat.otherUser);
+
+        const unsub = onSnapshot(doc(db, 'users', otherUserId), (docSnap) => {
+            if (docSnap.exists()) {
+                setOtherUserProfile(docSnap.data());
+            }
+        });
+        return unsub;
+    }, [selectedChat?.id, currentUser]);
+
+
+    // 4. Fetch Messages
+    useEffect(() => {
+        if (!selectedChat || !currentUser) return;
+
+        const markAsRead = async () => {
+            const chatRef = doc(db, 'chats', selectedChat.id);
+            await setDoc(chatRef, {
+                lastRead: {
+                    [currentUser.uid]: serverTimestamp()
+                }
+            }, { merge: true });
+        };
+        markAsRead();
+
+        const q = query(
+            collection(db, 'chats', selectedChat.id, 'messages'),
+            orderBy('createdAt', 'asc')
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setMessages(msgs);
+            setTimeout(() => scrollToBottom(true), 100);
+            markAsRead();
+        });
+
+        return unsubscribe;
+    }, [selectedChat, currentUser]);
+
+    const scrollToBottom = (smooth = true) => {
+        messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+    };
+
+    const handleImageSelect = async (e) => {
+        const file = e.target.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            try {
+                const compressed = await compressImage(file, 800, 0.7);
+                setSelectedImage(compressed);
+            } catch (error) {
+                console.error("Error processing image:", error);
+            }
+        }
+    };
+
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
+        if ((!newMessage.trim() && !selectedImage) || !currentUser || !selectedChat) return;
+
+        setSending(true);
+        const msgText = newMessage.trim();
+        const msgImage = selectedImage;
+
+        setNewMessage('');
+        setSelectedImage(null);
+
+        try {
+            await addDoc(collection(db, 'chats', selectedChat.id, 'messages'), {
+                text: msgText,
+                image: msgImage,
+                senderId: currentUser.uid,
+                createdAt: serverTimestamp()
+            });
+
+            await setDoc(doc(db, 'chats', selectedChat.id), {
+                lastMessage: {
+                    text: msgImage ? '📷 Imagen' : msgText,
+                    senderId: currentUser.uid,
+                    createdAt: serverTimestamp()
+                },
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+        } catch (error) {
+            console.error("Error sending message:", error);
+        } finally {
+            setSending(false);
+        }
+    };
 
     return (
-        // Wrapper: 100dvh on mobile to avoid browser bar issues, normal height on desktop
         <div className="h-[calc(100dvh-55px)] md:h-[calc(100vh-80px)] max-w-[935px] mx-auto bg-background md:border md:border-border md:rounded-xl md:my-5 overflow-hidden shadow-sm flex">
 
-            {/* Left: Chat List - Always visible on desktop, hidden on mobile if chat is selected (managed via Portal) */}
             <div className={`w-full md:w-[350px] border-r border-border flex flex-col`}>
                 <div className="p-4 border-b border-border font-bold text-lg flex justify-between items-center h-[60px]">
                     <span>{userProfile?.username || 'Chats'}</span>
@@ -447,10 +492,26 @@ export default function MessagesPage() {
                 </div>
             </div>
 
-            {/* Right: Chat Window (Desktop) */}
             <div className="hidden md:flex flex-1 flex-col w-full bg-background">
                 {selectedChat ? (
-                    <ChatContent />
+                    <ChatContent
+                        isMobile={isMobile}
+                        selectedChat={selectedChat}
+                        setSelectedChat={setSelectedChat}
+                        otherUserProfile={otherUserProfile}
+                        messages={messages}
+                        currentUser={currentUser}
+                        messagesEndRef={messagesEndRef}
+                        selectedImage={selectedImage}
+                        setSelectedImage={setSelectedImage}
+                        handleSendMessage={handleSendMessage}
+                        fileInputRef={fileInputRef}
+                        handleImageSelect={handleImageSelect}
+                        newMessage={newMessage}
+                        setNewMessage={setNewMessage}
+                        sending={sending}
+                        scrollToBottom={scrollToBottom}
+                    />
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8 text-center bg-background/50">
                         <div className="w-24 h-24 rounded-full border-2 border-current flex items-center justify-center mb-4 opacity-10">
@@ -464,10 +525,34 @@ export default function MessagesPage() {
                 )}
             </div>
 
-            {/* Mobile Chat Portal - Rendered at Body Level to cover EVERYTHING */}
+            {/* Mobile Chat Portal */}
             {isMobile && selectedChat && createPortal(
-                <div className="fixed inset-0 z-[10000] bg-background animate-in slide-in-from-right duration-300">
-                    <ChatContent />
+                <div
+                    className="fixed inset-0 z-[10000] bg-background flex flex-col"
+                    style={{
+                        height: keyboardHeight > 0
+                            ? `${window.visualViewport?.height || window.innerHeight}px`
+                            : '100dvh'
+                    }}
+                >
+                    <ChatContent
+                        isMobile={isMobile}
+                        selectedChat={selectedChat}
+                        setSelectedChat={setSelectedChat}
+                        otherUserProfile={otherUserProfile}
+                        messages={messages}
+                        currentUser={currentUser}
+                        messagesEndRef={messagesEndRef}
+                        selectedImage={selectedImage}
+                        setSelectedImage={setSelectedImage}
+                        handleSendMessage={handleSendMessage}
+                        fileInputRef={fileInputRef}
+                        handleImageSelect={handleImageSelect}
+                        newMessage={newMessage}
+                        setNewMessage={setNewMessage}
+                        sending={sending}
+                        scrollToBottom={scrollToBottom}
+                    />
                 </div>,
                 document.body
             )}
