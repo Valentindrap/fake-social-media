@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Settings, Grid, Bookmark, Users, MoreHorizontal } from 'lucide-react';
-import { collection, query, where, getDocs, db, doc, getDoc } from '@/lib/firebase';
+import { Settings, Grid, Bookmark, Users, MoreHorizontal, Trash2, Heart, X, Plus } from 'lucide-react';
+import StoryViewer from '@/components/stories/StoryViewer';
+import { collection, query, where, getDocs, db, doc, getDoc, orderBy } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useFollow } from '@/hooks/useFollow';
 import { Button } from '@/components/ui/button';
@@ -13,45 +14,92 @@ export default function ProfilePage() {
     const navigate = useNavigate();
     const [profile, setProfile] = useState(null);
     const [posts, setPosts] = useState([]);
+    const [selectedPost, setSelectedPost] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [highlights, setHighlights] = useState([]);
+    const [showCreateHighlight, setShowCreateHighlight] = useState(false);
+    const [viewingHighlight, setViewingHighlight] = useState(null);
 
     const { isFollowing, toggleFollow } = useFollow(profile?.id);
 
     const isOwnProfile = currentUser && userProfile?.username === username;
 
+    const [activeTab, setActiveTab] = useState('posts');
+
     useEffect(() => {
-        async function fetchProfile() {
+        async function fetchProfileAndPosts() {
+            setLoading(true);
             try {
-                const usersRef = collection(db, 'users');
-                const q = query(usersRef, where('username', '==', username));
-                const querySnapshot = await getDocs(q);
+                // 1. Fetch Profile Data (only if needed or first load)
+                if (!profile || profile.username !== username) {
+                    const usersRef = collection(db, 'users');
+                    const q = query(usersRef, where('username', '==', username));
+                    const querySnapshot = await getDocs(q);
 
-                if (!querySnapshot.empty) {
-                    const userDoc = querySnapshot.docs[0];
-                    const userData = { id: userDoc.id, ...userDoc.data() };
-                    setProfile(userData);
-
-                    // Fetch posts
-                    const postsRef = collection(db, 'posts');
-                    const postsQ = query(postsRef, where('userId', '==', userDoc.id));
-                    const postsSnapshot = await getDocs(postsQ);
-                    const userPosts = postsSnapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    setPosts(userPosts);
+                    if (!querySnapshot.empty) {
+                        const userDoc = querySnapshot.docs[0];
+                        const userData = { id: userDoc.id, ...userDoc.data() };
+                        setProfile(userData);
+                    } else {
+                        setProfile(null);
+                        setLoading(false);
+                        return;
+                    }
                 }
+
+                if (!profile && !username) return; // Guard
+
+                const targetUserId = profile ? profile.id : null; // Logic is redundant if we just fetched.
+                // Re-query user ID if we just setProfile? profile isn't updated in state immediately.
+                // We need the ID.
+                let useId = profile?.id;
+                if (!useId) {
+                    const usersRef = collection(db, 'users');
+                    const q = query(usersRef, where('username', '==', username));
+                    const snap = await getDocs(q);
+                    if (!snap.empty) useId = snap.docs[0].id;
+                }
+
+                if (!useId) return;
+
+                // 2. Fetch Content based on Tab
+                let fetchedPosts = [];
+                if (activeTab === 'posts') {
+                    const postsQ = query(collection(db, 'posts'), where('userId', '==', useId));
+                    const snap = await getDocs(postsQ);
+                    fetchedPosts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } else if (activeTab === 'saved' && isOwnProfile) {
+                    const savedQ = query(collection(db, 'users', currentUser.uid, 'saved'), orderBy('savedAt', 'desc'));
+                    const snap = await getDocs(savedQ);
+                    fetchedPosts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } else if (activeTab === 'tagged') {
+                    // Tagged logic (placeholder query)
+                    const taggedQ = query(collection(db, 'posts'), where('taggedUsers', 'array-contains', useId));
+                    const snap = await getDocs(taggedQ);
+                    fetchedPosts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                }
+
+                // Sort posts by date (client side to avoid index hell)
+                fetchedPosts.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+                setPosts(fetchedPosts);
+
+                // 3. Fetch Highlights
+                if (useId) {
+                    const hlQ = query(collection(db, 'users', useId, 'highlights'), orderBy('createdAt', 'desc'));
+                    const hlSnap = await getDocs(hlQ);
+                    setHighlights(hlSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                }
+
             } catch (error) {
-                console.error("Error fetching profile:", error);
+                console.error("Error fetching profile content:", error);
             } finally {
                 setLoading(false);
             }
         }
 
-        if (username) {
-            fetchProfile();
-        }
-    }, [username]);
+        fetchProfileAndPosts();
+    }, [username, activeTab, currentUser, isOwnProfile]); // Removed profile dependency to avoid loop, handled inside
 
     const handleFollow = async () => {
         await toggleFollow();
@@ -106,8 +154,8 @@ export default function ProfilePage() {
                             <div className="flex gap-2 justify-center md:justify-start">
                                 <Button
                                     className={`font-semibold h-8 px-6 transition-all ${isFollowing
-                                            ? 'bg-zinc-200 dark:bg-zinc-800 text-foreground hover:bg-zinc-300 dark:hover:bg-zinc-700'
-                                            : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                        ? 'bg-zinc-200 dark:bg-zinc-800 text-foreground hover:bg-zinc-300 dark:hover:bg-zinc-700'
+                                        : 'bg-blue-500 hover:bg-blue-600 text-white'
                                         }`}
                                     onClick={handleFollow}
                                 >
@@ -145,15 +193,57 @@ export default function ProfilePage() {
                 </section>
             </header>
 
+            {/* Highlights Section */}
+            <div className="mb-12 px-4 md:px-0 scroll-container overflow-x-auto pb-4">
+                <div className="flex gap-4 md:gap-8 min-w-max">
+                    {/* Create Highlight Button (Owner Only) */}
+                    {isOwnProfile && (
+                        <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setShowCreateHighlight(true)}>
+                            <div className="w-[60px] h-[60px] md:w-[77px] md:h-[77px] rounded-full border border-border flex items-center justify-center bg-secondary/50 group-hover:bg-secondary transition-colors">
+                                <Plus className="h-6 w-6 md:h-8 md:w-8 text-muted-foreground" />
+                            </div>
+                            <span className="text-xs font-semibold">Nueva</span>
+                        </div>
+                    )}
+
+                    {/* Highlights List */}
+                    {highlights.map((highlight) => (
+                        <div
+                            key={highlight.id}
+                            className="flex flex-col items-center gap-2 cursor-pointer group"
+                            onClick={() => setViewingHighlight(highlight)}
+                        >
+                            <div className="w-[60px] h-[60px] md:w-[77px] md:h-[77px] rounded-full border border-border p-[2px] bg-background">
+                                <div className="w-full h-full rounded-full overflow-hidden bg-secondary relative">
+                                    <img src={highlight.coverImage} className="w-full h-full object-cover" />
+                                </div>
+                            </div>
+                            <span className="text-xs font-semibold truncate max-w-[70px] text-center">{highlight.title}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             {/* Tabs */}
             <div className="border-t border-border flex justify-center gap-12 text-xs font-semibold tracking-widest text-muted-foreground mb-4">
-                <button className="flex items-center gap-1.5 h-[52px] border-t-2 border-foreground text-foreground -mt-[1px]">
+                <button
+                    onClick={() => setActiveTab('posts')}
+                    className={`flex items-center gap-1.5 h-[52px] border-t-2 -mt-[1px] transition-colors ${activeTab === 'posts' ? 'border-foreground text-foreground' : 'border-transparent hover:text-foreground'}`}
+                >
                     <Grid className="h-3 w-3" /> PUBLICACIONES
                 </button>
-                <button className="flex items-center gap-1.5 h-[52px] border-t-2 border-transparent hover:text-foreground -mt-[1px] transition-colors">
-                    <Bookmark className="h-3 w-3" /> GUARDADO
-                </button>
-                <button className="flex items-center gap-1.5 h-[52px] border-t-2 border-transparent hover:text-foreground -mt-[1px] transition-colors">
+                {isOwnProfile && (
+                    <button
+                        onClick={() => setActiveTab('saved')}
+                        className={`flex items-center gap-1.5 h-[52px] border-t-2 -mt-[1px] transition-colors ${activeTab === 'saved' ? 'border-foreground text-foreground' : 'border-transparent hover:text-foreground'}`}
+                    >
+                        <Bookmark className="h-3 w-3" /> GUARDADO
+                    </button>
+                )}
+                <button
+                    onClick={() => setActiveTab('tagged')}
+                    className={`flex items-center gap-1.5 h-[52px] border-t-2 -mt-[1px] transition-colors ${activeTab === 'tagged' ? 'border-foreground text-foreground' : 'border-transparent hover:text-foreground'}`}
+                >
                     <Users className="h-3 w-3" /> ETIQUETAS
                 </button>
             </div>
@@ -162,7 +252,11 @@ export default function ProfilePage() {
             {posts.length > 0 ? (
                 <div className="grid grid-cols-3 gap-1 md:gap-7">
                     {posts.map((post) => (
-                        <div key={post.id} className="relative aspect-square group cursor-pointer bg-secondary">
+                        <div
+                            key={post.id}
+                            className="relative aspect-square group cursor-pointer bg-secondary"
+                            onClick={() => setSelectedPost(post)}
+                        >
                             <img src={post.image} alt="" className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <div className="flex gap-6 text-white font-bold">
@@ -185,6 +279,222 @@ export default function ProfilePage() {
                     </div>
                 </div>
             )}
+
+            {/* Post Modal */}
+            {selectedPost && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedPost(null)}>
+                    <div className="bg-background max-w-4xl w-full max-h-[90vh] rounded-lg overflow-hidden flex flex-col md:flex-row shadow-2xl" onClick={e => e.stopPropagation()}>
+
+                        {/* Image Side */}
+                        <div className="flex-1 bg-black flex items-center justify-center min-h-[300px] md:min-h-[500px]">
+                            <img src={selectedPost.image} className="max-w-full max-h-full object-contain" />
+                        </div>
+
+                        {/* Details Side (Simplified PostCard logic) */}
+                        <div className="w-full md:w-[350px] flex flex-col border-l border-border">
+                            {/* Header */}
+                            <div className="p-4 border-b border-border flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <Avatar className="h-8 w-8 border border-border">
+                                        <AvatarImage src={profile.avatarUrl} />
+                                        <AvatarFallback>{profile.username[0]}</AvatarFallback>
+                                    </Avatar>
+                                    <span className="font-semibold text-sm">{profile.username}</span>
+                                </div>
+                                {isOwnProfile && (
+                                    <div className="relative">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10"
+                                            onClick={async () => {
+                                                if (confirm('¿Estás seguro de borrar esta publicación?')) {
+                                                    try {
+                                                        await import('firebase/firestore').then(({ deleteDoc }) => deleteDoc(doc(db, 'posts', selectedPost.id)));
+                                                        setPosts(prev => prev.filter(p => p.id !== selectedPost.id)); // Optimistic remove
+                                                        setSelectedPost(null);
+                                                    } catch (e) {
+                                                        console.error("Error borrando:", e);
+                                                    }
+                                                }
+                                            }}
+                                        >
+                                            <Trash2 className="h-5 w-5" />
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Caption / Comments Area */}
+                            <div className="flex-1 p-4 overflow-y-auto text-sm space-y-4">
+                                <div>
+                                    <span className="font-semibold mr-2">{profile.username}</span>
+                                    <span>{selectedPost.caption}</span>
+                                </div>
+                                {/* Comments could go here */}
+                            </div>
+
+                            {/* Actions Footer */}
+                            <div className="p-4 border-t border-border">
+                                <div className="flex items-center gap-4 mb-2">
+                                    {/* Simple Like button placeholder or real one if imported */}
+                                    <Heart className={`h-6 w-6 ${selectedPost.likedBy?.includes(currentUser?.uid) ? 'fill-red-500 text-red-500' : ''}`} />
+                                    <div className="flex-1"></div>
+                                    <Bookmark className="h-6 w-6" />
+                                </div>
+                                <div className="font-bold text-sm mb-1">{selectedPost.likes || 0} Me gusta</div>
+                                <div className="text-[10px] text-muted-foreground uppercase">
+                                    {selectedPost.createdAt?.toDate ? selectedPost.createdAt.toDate().toLocaleDateString() : 'Hace un momento'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Close Button Mobile */}
+                    <button className="absolute top-4 right-4 text-white md:hidden" onClick={() => setSelectedPost(null)}>
+                        <X className="h-8 w-8" />
+                    </button>
+                </div>
+            )}
+            {/* Create Highlight Dialog - Simplified for MVP */}
+            {showCreateHighlight && (
+                <CreateHighlightDialog
+                    currentUser={currentUser}
+                    onClose={() => setShowCreateHighlight(false)}
+                    onCreated={() => {
+                        // Refresh highlights
+                        const fetchH = async () => {
+                            const hlQ = query(collection(db, 'users', currentUser.uid, 'highlights'), orderBy('createdAt', 'desc'));
+                            const hlSnap = await getDocs(hlQ);
+                            setHighlights(hlSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                        };
+                        fetchH();
+                        setShowCreateHighlight(false);
+                    }}
+                />
+            )}
+
+            {/* Highlight Viewer */}
+            {viewingHighlight && (
+                <StoryViewer
+                    stories={viewingHighlight.stories}
+                    user={profile}
+                    onClose={() => setViewingHighlight(null)}
+                    isOwner={isOwnProfile}
+                // Optionally allow deleting highlight itself? For now just view.
+                />
+            )}
+        </div>
+    );
+}
+
+// Sub-component for Creating Highlight
+function CreateHighlightDialog({ currentUser, onClose, onCreated }) {
+    const [step, setStep] = useState(1); // 1: Select Stories, 2: Name & Cover
+    const [stories, setStories] = useState([]);
+    const [selectedStories, setSelectedStories] = useState([]);
+    const [title, setTitle] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        // Fetch ALL past stories for user
+        const fetchAllStories = async () => {
+            const q = query(
+                collection(db, 'users', currentUser.uid, 'stories'),
+                orderBy('createdAt', 'desc')
+            );
+            const snap = await getDocs(q);
+            setStories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        };
+        fetchAllStories();
+    }, [currentUser]);
+
+    const handleCreate = async () => {
+        if (!title.trim() || selectedStories.length === 0) return;
+        setLoading(true);
+        try {
+            // Create highlight doc
+            const coverImage = selectedStories[0].image; // Default to first selected
+            // We store the full story objects in the highlight for simplicity (or just refs?)
+            // Store full objects so they persist even if original story is deleted? Or references.
+            // Let's store full objects to be "Archived" effectively.
+
+            await import('firebase/firestore').then(async ({ addDoc, collection, serverTimestamp }) => {
+                await addDoc(collection(db, 'users', currentUser.uid, 'highlights'), {
+                    title,
+                    coverImage,
+                    stories: selectedStories,
+                    createdAt: serverTimestamp()
+                });
+            });
+            onCreated();
+        } catch (e) {
+            console.error("Error creating highlight:", e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-background w-full max-w-md rounded-xl overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="p-4 border-b border-border flex justify-between items-center">
+                    <h3 className="font-semibold">{step === 1 ? 'Seleccionar historias' : 'Nombre y portada'}</h3>
+                    <button onClick={onClose}><X className="h-6 w-6" /></button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                    {step === 1 ? (
+                        <div className="grid grid-cols-3 gap-2">
+                            {stories.map(story => (
+                                <div
+                                    key={story.id}
+                                    className={`relative aspect-[9/16] cursor-pointer rounded-lg overflow-hidden border-2 ${selectedStories.find(s => s.id === story.id) ? 'border-blue-500 opacity-100' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                                    onClick={() => {
+                                        if (selectedStories.find(s => s.id === story.id)) {
+                                            setSelectedStories(prev => prev.filter(s => s.id !== story.id));
+                                        } else {
+                                            setSelectedStories(prev => [...prev, story]);
+                                        }
+                                    }}
+                                >
+                                    <img src={story.image} className="w-full h-full object-cover" />
+                                    {selectedStories.find(s => s.id === story.id) && (
+                                        <div className="absolute top-1 right-1 bg-blue-500 rounded-full p-1">
+                                            <div className="w-2 h-2 bg-white rounded-full" />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center gap-6 py-8">
+                            <div className="w-24 h-24 rounded-full border-2 border-border overflow-hidden p-1">
+                                <div className="w-full h-full rounded-full bg-secondary">
+                                    {selectedStories.length > 0 && <img src={selectedStories[0].image} className="w-full h-full object-cover" />}
+                                </div>
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Destacada"
+                                className="bg-transparent border-b border-border p-2 text-center focus:outline-none focus:border-foreground"
+                                value={title}
+                                onChange={e => setTitle(e.target.value)}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-4 border-t border-border">
+                    {step === 1 ? (
+                        <Button className="w-full" disabled={selectedStories.length === 0} onClick={() => setStep(2)}>Siguiente</Button>
+                    ) : (
+                        <Button className="w-full" disabled={!title.trim() || loading} onClick={handleCreate}>
+                            {loading ? 'Creando...' : 'Listo'}
+                        </Button>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

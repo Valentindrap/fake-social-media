@@ -12,13 +12,25 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/context/AuthContext';
-import { db, doc, updateDoc, arrayUnion, arrayRemove, addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from '@/lib/firebase';
+import { db, doc, updateDoc, arrayUnion, arrayRemove, addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, setDoc, getDoc } from '@/lib/firebase';
 import { useFollow } from '@/hooks/useFollow';
 import { createNotification } from '@/lib/notificationUtils';
 
 export default function PostCard({ post }) {
     const { currentUser, userProfile } = useAuth();
     const { isFollowing, toggleFollow } = useFollow(post.userId);
+    const [postUser, setPostUser] = useState(null);
+
+    // Fetch live user data (avatar/username)
+    useEffect(() => {
+        if (!post.userId) return;
+        const unsubscribe = onSnapshot(doc(db, 'users', post.userId), (doc) => {
+            if (doc.exists()) {
+                setPostUser(doc.data());
+            }
+        });
+        return unsubscribe;
+    }, [post.userId]);
     const [liked, setLiked] = useState(false);
     const [likeCount, setLikeCount] = useState(0);
     const [saved, setSaved] = useState(false);
@@ -39,7 +51,16 @@ export default function PostCard({ post }) {
             setLiked(post.likedBy.includes(currentUser.uid));
             setLikeCount(post.likedBy.length);
         } else {
-            setLikeCount(post.likes || 0); // Fallback for old posts
+            setLikeCount(post.likes || 0);
+        }
+
+        // Check if saved
+        if (currentUser) {
+            const checkSaved = async () => {
+                const docSnap = await getDoc(doc(db, 'users', currentUser.uid, 'saved', post.id));
+                if (docSnap.exists()) setSaved(true);
+            };
+            checkSaved();
         }
     }, [currentUser, post]);
 
@@ -141,7 +162,7 @@ export default function PostCard({ post }) {
                         <div className="story-ring p-[2px]">
                             <div className="story-ring-inner p-[1.5px]">
                                 <Avatar className="w-8 h-8 border border-border">
-                                    <AvatarImage src={post.user.avatar} />
+                                    <AvatarImage src={postUser?.avatarUrl || post.user.avatar} />
                                     <AvatarFallback>{post.user.username[0].toUpperCase()}</AvatarFallback>
                                 </Avatar>
                             </div>
@@ -231,7 +252,20 @@ export default function PostCard({ post }) {
                     <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => setSaved(!saved)}
+                        onClick={async () => {
+                            if (!currentUser) return;
+                            const savedRef = doc(db, 'users', currentUser.uid, 'saved', post.id);
+                            if (saved) {
+                                await import('firebase/firestore').then(({ deleteDoc }) => deleteDoc(savedRef));
+                                setSaved(false);
+                            } else {
+                                await setDoc(savedRef, {
+                                    ...post,
+                                    savedAt: serverTimestamp()
+                                });
+                                setSaved(true);
+                            }
+                        }}
                     >
                         <Bookmark
                             className={`h-[22px] w-[22px] transition-colors ${saved ? 'fill-foreground' : 'hover:text-muted-foreground'

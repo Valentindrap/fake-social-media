@@ -9,6 +9,7 @@ import SearchPage from '@/pages/SearchPage';
 import CreatePostPage from '@/pages/CreatePostPage';
 import NotificationsPage from '@/pages/NotificationsPage';
 import MessagesPage from '@/pages/MessagesPage';
+import NotFoundPage from '@/pages/NotFoundPage';
 
 function PrivateRoute({ children }) {
   const { currentUser, loading } = useAuth();
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="create" element={<CreatePostPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="messages" element={<MessagesPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
       </AuthProvider>

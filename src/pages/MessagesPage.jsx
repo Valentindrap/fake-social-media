@@ -213,16 +213,18 @@ export default function MessagesPage() {
                         </div>
 
                         {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-secondary/5">
-                            {messages.map(msg => {
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-background">
+                            {messages.map((msg, index) => {
                                 const isMe = msg.senderId === currentUser.uid;
+                                const isSequential = index > 0 && messages[index - 1].senderId === msg.senderId;
+
                                 return (
-                                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-1`}>
                                         <div className={`
-                                            max-w-[70%] px-4 py-2 rounded-2xl text-sm
+                                            max-w-[75%] px-4 py-2 text-[15px]
                                             ${isMe
-                                                ? 'bg-papu-coral text-white rounded-br-sm'
-                                                : 'bg-secondary text-foreground rounded-bl-sm border border-border/50'
+                                                ? 'bg-[#3797F0] text-white rounded-[22px] rounded-br-[4px]'
+                                                : 'bg-[#EFEFEF] dark:bg-[#262626] text-black dark:text-white rounded-[22px] rounded-bl-[4px]'
                                             }
                                         `}>
                                             {msg.text}
