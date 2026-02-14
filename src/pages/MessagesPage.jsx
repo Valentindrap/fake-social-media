@@ -5,9 +5,10 @@ import { db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimest
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, ArrowLeft } from 'lucide-react';
+import { Send, ArrowLeft, Image as ImageIcon, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { compressImage } from '@/lib/imageUtils';
 
 export default function MessagesPage() {
     const { currentUser, userProfile } = useAuth();
@@ -18,8 +19,11 @@ export default function MessagesPage() {
     const [selectedChat, setSelectedChat] = useState(null);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
+    const [selectedImage, setSelectedImage] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [sending, setSending] = useState(false);
     const messagesEndRef = useRef(null);
+    const fileInputRef = useRef(null);
 
     // 1. Fetch User's Chats
     useEffect(() => {
@@ -61,11 +65,6 @@ export default function MessagesPage() {
                 return;
             }
 
-            // If not found in loaded chats, maybe it exists but not loaded (unlikely with small lists) or create new
-            // For now, let's create a temporary chat object or create it in DB immediately
-            // Better to create in DB so we can message immediately
-
-            // Just setDoc with merge. If it exists, it updates (harmless). If not, creates.
             try {
                 const targetUserDoc = await getDoc(doc(db, 'users', targetUserId));
                 if (!targetUserDoc.exists()) return;
@@ -114,7 +113,7 @@ export default function MessagesPage() {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setMessages(msgs);
-            scrollToBottom();
+            setTimeout(scrollToBottom, 100);
         });
 
         return unsubscribe;
@@ -124,17 +123,35 @@ export default function MessagesPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
+    const handleImageSelect = async (e) => {
+        const file = e.target.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            try {
+                const compressed = await compressImage(file, 800, 0.7);
+                setSelectedImage(compressed);
+            } catch (error) {
+                console.error("Error processing image:", error);
+            }
+        }
+    };
+
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim() || !currentUser || !selectedChat) return;
+        if ((!newMessage.trim() && !selectedImage) || !currentUser || !selectedChat) return;
 
+        setSending(true);
         const msgText = newMessage.trim();
-        setNewMessage(''); // optimistic clear
+        const msgImage = selectedImage;
+
+        // Reset inputs immediately (optimistic UI)
+        setNewMessage('');
+        setSelectedImage(null);
 
         try {
             // Add message
             await addDoc(collection(db, 'chats', selectedChat.id, 'messages'), {
                 text: msgText,
+                image: msgImage,
                 senderId: currentUser.uid,
                 createdAt: serverTimestamp()
             });
@@ -142,7 +159,7 @@ export default function MessagesPage() {
             // Update chat last message
             await setDoc(doc(db, 'chats', selectedChat.id), {
                 lastMessage: {
-                    text: msgText,
+                    text: msgImage ? '📷 Imagen' : msgText,
                     senderId: currentUser.uid,
                     createdAt: serverTimestamp()
                 },
@@ -151,11 +168,15 @@ export default function MessagesPage() {
 
         } catch (error) {
             console.error("Error sending message:", error);
+        } finally {
+            setSending(false);
         }
     };
 
     return (
-        <div className="flex h-[calc(100vh-60px)] md:h-[calc(100vh-80px)] max-w-[935px] mx-auto bg-background md:border md:border-border md:rounded-xl md:my-5 overflow-hidden shadow-sm">
+        // Wrapper: 100dvh on mobile to avoid browser bar issues, normal height on desktop
+        <div className="h-[calc(100dvh-55px)] md:h-[calc(100vh-80px)] max-w-[935px] mx-auto bg-background md:border md:border-border md:rounded-xl md:my-5 overflow-hidden shadow-sm flex">
+
             {/* Left: Chat List */}
             <div className={`w-full md:w-[350px] border-r border-border flex flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`}>
                 <div className="p-4 border-b border-border font-bold text-lg flex justify-between items-center h-[60px]">
@@ -182,8 +203,8 @@ export default function MessagesPage() {
                                 </Avatar>
                                 <div className="flex-1 min-w-0">
                                     <div className="font-semibold text-sm truncate">{chat.otherUser?.username}</div>
-                                    <div className="text-xs text-muted-foreground truncate">
-                                        {chat.lastMessage?.senderId === currentUser?.uid ? 'Tú: ' : ''}
+                                    <div className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                                        {chat.lastMessage?.senderId === currentUser?.uid && 'Tú: '}
                                         {chat.lastMessage?.text || 'Nuevo chat'}
                                     </div>
                                 </div>
@@ -197,12 +218,17 @@ export default function MessagesPage() {
             </div>
 
             {/* Right: Chat Window */}
-            <div className={`flex-1 flex flex-col ${!selectedChat ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`flex-1 flex flex-col w-full ${!selectedChat ? 'hidden md:flex' : 'flex'}`}>
                 {selectedChat ? (
                     <>
                         {/* Header */}
                         <div className="h-[60px] border-b border-border flex items-center px-4 gap-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                            <Button variant="ghost" size="icon" className="md:hidden -ml-2" onClick={() => setSelectedChat(null)}>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="md:hidden -ml-2"
+                                onClick={() => setSelectedChat(null)}
+                            >
                                 <ArrowLeft className="h-6 w-6" />
                             </Button>
                             <Avatar className="h-8 w-8 border border-border">
@@ -213,21 +239,29 @@ export default function MessagesPage() {
                         </div>
 
                         {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-background">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-background flex flex-col">
                             {messages.map((msg, index) => {
                                 const isMe = msg.senderId === currentUser.uid;
-                                const isSequential = index > 0 && messages[index - 1].senderId === msg.senderId;
 
                                 return (
                                     <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-1`}>
                                         <div className={`
-                                            max-w-[75%] px-4 py-2 text-[15px]
+                                            max-w-[75%] px-4 py-2 text-[15px] shadow-sm
                                             ${isMe
                                                 ? 'bg-[#3797F0] text-white rounded-[22px] rounded-br-[4px]'
                                                 : 'bg-[#EFEFEF] dark:bg-[#262626] text-black dark:text-white rounded-[22px] rounded-bl-[4px]'
                                             }
                                         `}>
-                                            {msg.text}
+                                            {msg.image && (
+                                                <div className="mb-2 -mx-2 -mt-2">
+                                                    <img
+                                                        src={msg.image}
+                                                        alt="adjunto"
+                                                        className={`max-h-[200px] w-auto object-cover ${isMe ? 'rounded-t-[18px]' : 'rounded-t-[18px]'}`}
+                                                    />
+                                                </div>
+                                            )}
+                                            {msg.text && <p className="whitespace-pre-wrap break-words">{msg.text}</p>}
                                         </div>
                                     </div>
                                 );
@@ -235,19 +269,54 @@ export default function MessagesPage() {
                             <div ref={messagesEndRef} />
                         </div>
 
+                        {/* Image Preview */}
+                        {selectedImage && (
+                            <div className="px-4 py-2 bg-background border-t border-border flex items-center gap-2">
+                                <div className="relative h-16 w-16 bg-secondary rounded-lg overflow-hidden border border-border">
+                                    <img src={selectedImage} alt="Preview" className="h-full w-full object-cover" />
+                                    <button
+                                        onClick={() => setSelectedImage(null)}
+                                        className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full p-0.5"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </div>
+                                <span className="text-xs text-muted-foreground">Imagen seleccionada</span>
+                            </div>
+                        )}
+
                         {/* Input */}
-                        <form onSubmit={handleSendMessage} className="p-4 border-t border-border bg-background">
+                        <form onSubmit={handleSendMessage} className="p-3 md:p-4 border-t border-border bg-background">
                             <div className="flex items-center gap-2 relative">
+                                <div className="relative">
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={handleImageSelect}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-muted-foreground hover:text-foreground"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <ImageIcon className="h-6 w-6" />
+                                    </Button>
+                                </div>
+
                                 <Input
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     placeholder="Envía un mensaje..."
-                                    className="rounded-full pr-12 focus-visible:ring-papu-coral"
+                                    className="rounded-full pr-12 focus-visible:ring-papu-coral bg-secondary/50 border-none"
                                 />
                                 <Button
                                     type="submit"
                                     size="icon"
-                                    disabled={!newMessage.trim()}
+                                    disabled={(!newMessage.trim() && !selectedImage) || sending}
                                     variant="ghost"
                                     className="absolute right-1 text-papu-coral hover:text-papu-coral/80 hover:bg-transparent"
                                 >
@@ -257,13 +326,13 @@ export default function MessagesPage() {
                         </form>
                     </>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8 text-center">
-                        <div className="w-24 h-24 rounded-full border-2 border-current flex items-center justify-center mb-4 opacity-20">
+                    <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8 text-center bg-background/50">
+                        <div className="w-24 h-24 rounded-full border-2 border-current flex items-center justify-center mb-4 opacity-10">
                             <Send className="h-10 w-10" />
                         </div>
                         <h2 className="text-xl font-light mb-2">Tus Mensajes</h2>
-                        <p className="text-sm max-w-xs">
-                            Envía fotos y mensajes privados a tus amigos o grupos.
+                        <p className="text-sm max-w-xs text-muted-foreground/80">
+                            Envía fotos y mensajes privados a tus amigos.
                         </p>
                     </div>
                 )}
