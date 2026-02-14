@@ -20,7 +20,7 @@ export default function StoriesBar() {
     // Fetch followed users with stories
     useEffect(() => {
         async function fetchStories() {
-            if (!userProfile?.following || userProfile.following.length === 0) {
+            if (!userProfile?.followingList || userProfile.followingList.length === 0) {
                 setUsersWithStories([]);
                 return;
             }
@@ -28,7 +28,7 @@ export default function StoriesBar() {
             try {
                 // Firestore 'in' limit is 10. Split if needed, but for now take last 10 followed
                 // In real app, you'd paginate or use a different strategy.
-                const followingSlice = userProfile.following.slice(0, 10);
+                const followingSlice = userProfile.followingList.slice(0, 10);
 
                 const q = query(
                     collection(db, 'users'),

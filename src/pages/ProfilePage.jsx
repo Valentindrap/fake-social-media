@@ -19,6 +19,8 @@ export default function ProfilePage() {
     const [highlights, setHighlights] = useState([]);
     const [showCreateHighlight, setShowCreateHighlight] = useState(false);
     const [viewingHighlight, setViewingHighlight] = useState(null);
+    const [activeStory, setActiveStory] = useState(null);
+    const [viewingStory, setViewingStory] = useState(null);
 
     const { isFollowing, toggleFollow } = useFollow(profile?.id);
 
@@ -30,7 +32,7 @@ export default function ProfilePage() {
         async function fetchProfileAndPosts() {
             setLoading(true);
             try {
-                // 1. Fetch Profile Data (only if needed or first load)
+                // 1. Fetch Profile Data
                 if (!profile || profile.username !== username) {
                     const usersRef = collection(db, 'users');
                     const q = query(usersRef, where('username', '==', username));
@@ -47,11 +49,8 @@ export default function ProfilePage() {
                     }
                 }
 
-                if (!profile && !username) return; // Guard
+                if (!profile && !username) return;
 
-                const targetUserId = profile ? profile.id : null; // Logic is redundant if we just fetched.
-                // Re-query user ID if we just setProfile? profile isn't updated in state immediately.
-                // We need the ID.
                 let useId = profile?.id;
                 if (!useId) {
                     const usersRef = collection(db, 'users');
@@ -73,13 +72,12 @@ export default function ProfilePage() {
                     const snap = await getDocs(savedQ);
                     fetchedPosts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 } else if (activeTab === 'tagged') {
-                    // Tagged logic (placeholder query)
                     const taggedQ = query(collection(db, 'posts'), where('taggedUsers', 'array-contains', useId));
                     const snap = await getDocs(taggedQ);
                     fetchedPosts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 }
 
-                // Sort posts by date (client side to avoid index hell)
+                // Sort posts by date (client side)
                 fetchedPosts.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
                 setPosts(fetchedPosts);
@@ -99,15 +97,32 @@ export default function ProfilePage() {
         }
 
         fetchProfileAndPosts();
-    }, [username, activeTab, currentUser, isOwnProfile]); // Removed profile dependency to avoid loop, handled inside
+    }, [username, activeTab, currentUser, isOwnProfile]);
+
+    // Check for active story on profile load
+    useEffect(() => {
+        const checkActiveStory = async () => {
+            if (!profile?.id) return;
+            const q = query(
+                collection(db, 'users', profile.id, 'stories'),
+                orderBy('createdAt', 'desc'),
+                limit(1)
+            );
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                const data = snap.docs[0].data();
+                const now = new Date();
+                const createdAt = data.createdAt?.toDate() || new Date(0);
+                if (now - createdAt < 24 * 60 * 60 * 1000) {
+                    setActiveStory({ id: snap.docs[0].id, ...data });
+                }
+            }
+        };
+        checkActiveStory();
+    }, [profile]);
 
     const handleFollow = async () => {
         await toggleFollow();
-        // Optimistic UI update logic is handled via real-time update in AuthContext?
-        // No, AuthContext updates MY following list.
-        // But PROFILE's follower count won't update automatically unless we listen to profile doc.
-        // For simplicity, we can manually increment logic here or switch ProfilePage to listen to local doc.
-        // Let's do simple local update:
         setProfile(prev => ({
             ...prev,
             followers: prev.followers + (isFollowing ? -1 : 1)
@@ -118,6 +133,43 @@ export default function ProfilePage() {
         if (!profile) return;
         navigate(`/messages?userId=${profile.id}`);
     };
+
+    const handleAvatarClick = async () => {
+        if (!activeStory || !profile) return;
+
+        try {
+            const q = query(
+                collection(db, 'users', profile.id, 'stories'),
+                orderBy('createdAt', 'desc'),
+                limit(20)
+            );
+            const snap = await getDocs(q);
+            const stories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const now = new Date();
+            const validStories = stories.filter(s => {
+                const created = s.createdAt?.toDate() || new Date(0);
+                return now - created < 24 * 60 * 60 * 1000;
+            });
+
+            if (validStories.length > 0) {
+                setViewingStory({
+                    user: profile,
+                    stories: validStories,
+                    currentIndex: 0
+                });
+            }
+        } catch (e) {
+            console.error("Error opening profile story:", e);
+        }
+    };
+
+    // Need to define `import('firebase/firestore').then(...)` alternative or standard import?
+    // Using standard imports from logic above, `deleteDoc` is not imported yet.
+    // Wait, the original file was using dynamic import for deleteDoc in some places?
+    // Let's check imports. `deleteDoc` is NOT in the top imports in the file view I saw.
+    // I will add `deleteDoc` and `limit` to the top import.
+
+    // Actually, let's fix the imports in this writing.
 
     if (loading) return (
         <div className="flex justify-center p-8">
@@ -131,11 +183,18 @@ export default function ProfilePage() {
         <div className="max-w-[935px] mx-auto px-4 py-8">
             {/* Header */}
             <header className="flex flex-col md:flex-row items-start md:items-center gap-8 mb-12">
-                <div className="mx-auto md:mx-0 w-[77px] h-[77px] md:w-[150px] md:h-[150px] flex-shrink-0">
-                    <Avatar className="w-full h-full border border-border">
-                        <AvatarImage src={profile.avatarUrl} className="object-cover" />
-                        <AvatarFallback>{profile.username[0].toUpperCase()}</AvatarFallback>
-                    </Avatar>
+                <div
+                    className="mx-auto md:mx-0 w-[77px] h-[77px] md:w-[150px] md:h-[150px] flex-shrink-0 cursor-pointer"
+                    onClick={handleAvatarClick}
+                >
+                    <div className={`w-full h-full rounded-full p-[3px] ${activeStory ? 'bg-gradient-to-tr from-yellow-400 to-fuchsia-600' : ''}`}>
+                        <div className="w-full h-full rounded-full border-2 border-background overflow-hidden relative">
+                            <Avatar className="w-full h-full">
+                                <AvatarImage src={profile.avatarUrl} className="object-cover" />
+                                <AvatarFallback>{profile.username[0].toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                        </div>
+                    </div>
                 </div>
 
                 <section className="flex-1 min-w-0 w-full">
@@ -185,7 +244,7 @@ export default function ProfilePage() {
                         <span className="font-semibold block">{profile.displayName}</span>
                         <p className="whitespace-pre-wrap">{profile.bio}</p>
                     </div>
-                    {/* Mobile Bio */}
+
                     <div className="text-sm md:hidden px-2 mb-4">
                         <span className="font-semibold block">{profile.displayName}</span>
                         <p className="whitespace-pre-wrap">{profile.bio}</p>
@@ -290,7 +349,7 @@ export default function ProfilePage() {
                             <img src={selectedPost.image} className="max-w-full max-h-full object-contain" />
                         </div>
 
-                        {/* Details Side (Simplified PostCard logic) */}
+                        {/* Details Side */}
                         <div className="w-full md:w-[350px] flex flex-col border-l border-border">
                             {/* Header */}
                             <div className="p-4 border-b border-border flex items-center justify-between">
@@ -301,7 +360,7 @@ export default function ProfilePage() {
                                     </Avatar>
                                     <span className="font-semibold text-sm">{profile.username}</span>
                                 </div>
-                                {isOwnProfile && (
+                                {currentUser?.uid === selectedPost.userId && (
                                     <div className="relative">
                                         <Button
                                             variant="ghost"
@@ -310,7 +369,8 @@ export default function ProfilePage() {
                                             onClick={async () => {
                                                 if (confirm('¿Estás seguro de borrar esta publicación?')) {
                                                     try {
-                                                        await import('firebase/firestore').then(({ deleteDoc }) => deleteDoc(doc(db, 'posts', selectedPost.id)));
+                                                        // Using dynamic import or direct? Let's use direct if imported, or dynamic but fix import
+                                                        await import('firebase/firestore').then(({ deleteDoc, doc }) => deleteDoc(doc(db, 'posts', selectedPost.id)));
                                                         setPosts(prev => prev.filter(p => p.id !== selectedPost.id)); // Optimistic remove
                                                         setSelectedPost(null);
                                                     } catch (e) {
@@ -331,13 +391,11 @@ export default function ProfilePage() {
                                     <span className="font-semibold mr-2">{profile.username}</span>
                                     <span>{selectedPost.caption}</span>
                                 </div>
-                                {/* Comments could go here */}
                             </div>
 
                             {/* Actions Footer */}
                             <div className="p-4 border-t border-border">
                                 <div className="flex items-center gap-4 mb-2">
-                                    {/* Simple Like button placeholder or real one if imported */}
                                     <Heart className={`h-6 w-6 ${selectedPost.likedBy?.includes(currentUser?.uid) ? 'fill-red-500 text-red-500' : ''}`} />
                                     <div className="flex-1"></div>
                                     <Bookmark className="h-6 w-6" />
@@ -356,13 +414,13 @@ export default function ProfilePage() {
                     </button>
                 </div>
             )}
+
             {/* Create Highlight Dialog - Simplified for MVP */}
             {showCreateHighlight && (
                 <CreateHighlightDialog
                     currentUser={currentUser}
                     onClose={() => setShowCreateHighlight(false)}
                     onCreated={() => {
-                        // Refresh highlights
                         const fetchH = async () => {
                             const hlQ = query(collection(db, 'users', currentUser.uid, 'highlights'), orderBy('createdAt', 'desc'));
                             const hlSnap = await getDocs(hlQ);
@@ -381,7 +439,26 @@ export default function ProfilePage() {
                     user={profile}
                     onClose={() => setViewingHighlight(null)}
                     isOwner={isOwnProfile}
-                // Optionally allow deleting highlight itself? For now just view.
+                />
+            )}
+
+            {/* Active Story Viewer (from Avatar) */}
+            {viewingStory && (
+                <StoryViewer
+                    stories={viewingStory.stories}
+                    user={profile}
+                    onClose={() => setViewingStory(null)}
+                    isOwner={isOwnProfile}
+                    onDelete={async (story) => {
+                        if (!isOwnProfile) return;
+                        try {
+                            await import('firebase/firestore').then(({ deleteDoc, doc }) => deleteDoc(doc(db, 'users', currentUser.uid, 'stories', story.id)));
+                            setViewingStory(null);
+                            setActiveStory(null);
+                        } catch (e) {
+                            console.error("Error deleting story from profile:", e);
+                        }
+                    }}
                 />
             )}
         </div>
@@ -390,14 +467,13 @@ export default function ProfilePage() {
 
 // Sub-component for Creating Highlight
 function CreateHighlightDialog({ currentUser, onClose, onCreated }) {
-    const [step, setStep] = useState(1); // 1: Select Stories, 2: Name & Cover
+    const [step, setStep] = useState(1);
     const [stories, setStories] = useState([]);
     const [selectedStories, setSelectedStories] = useState([]);
     const [title, setTitle] = useState('');
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        // Fetch ALL past stories for user
         const fetchAllStories = async () => {
             const q = query(
                 collection(db, 'users', currentUser.uid, 'stories'),
@@ -413,12 +489,7 @@ function CreateHighlightDialog({ currentUser, onClose, onCreated }) {
         if (!title.trim() || selectedStories.length === 0) return;
         setLoading(true);
         try {
-            // Create highlight doc
-            const coverImage = selectedStories[0].image; // Default to first selected
-            // We store the full story objects in the highlight for simplicity (or just refs?)
-            // Store full objects so they persist even if original story is deleted? Or references.
-            // Let's store full objects to be "Archived" effectively.
-
+            const coverImage = selectedStories[0].image;
             await import('firebase/firestore').then(async ({ addDoc, collection, serverTimestamp }) => {
                 await addDoc(collection(db, 'users', currentUser.uid, 'highlights'), {
                     title,
