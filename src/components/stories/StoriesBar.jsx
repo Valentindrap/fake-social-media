@@ -30,9 +30,11 @@ export default function StoriesBar() {
                 // In real app, you'd paginate or use a different strategy.
                 const followingSlice = userProfile.followingList.slice(0, 10);
 
+                // Use documentId() to query by document ID (which is the UID)
+                const { documentId } = await import('firebase/firestore');
                 const q = query(
                     collection(db, 'users'),
-                    where('uid', 'in', followingSlice)
+                    where(documentId(), 'in', followingSlice)
                 );
 
                 const snapshot = await getDocs(q);
