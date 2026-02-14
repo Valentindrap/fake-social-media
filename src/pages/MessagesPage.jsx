@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc } from '@/lib/firebase';
+import { db, collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc, updateDoc } from '@/lib/firebase';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +51,15 @@ const ChatListItem = ({ chat, currentUser, selectedChat, setSelectedChat }) => {
     );
 };
 
+// Simple Typing Indicator Component
+const TypingIndicator = () => (
+    <div className="flex items-center gap-1 px-4 py-3 bg-secondary/50 rounded-2xl w-fit mb-2 animate-in fade-in duration-300">
+        <div className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+        <div className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+        <div className="w-1.5 h-1.5 bg-foreground/40 rounded-full animate-bounce"></div>
+    </div>
+);
+
 // Extracted ChatContent Component
 const ChatContent = memo(({
     isMobile,
@@ -68,7 +77,9 @@ const ChatContent = memo(({
     newMessage,
     setNewMessage,
     sending,
-    scrollToBottom
+    scrollToBottom,
+    otherUserTyping, // New Prop
+    handleTyping     // New Prop
 }) => {
     // Scroll to bottom on mount (instant)
     useEffect(() => {
@@ -167,6 +178,7 @@ const ChatContent = memo(({
                         </div>
                     );
                 })}
+                {otherUserTyping && <TypingIndicator />}
                 <div ref={messagesEndRef} />
             </div>
 
@@ -210,7 +222,10 @@ const ChatContent = memo(({
 
                     <Input
                         value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
+                        onChange={(e) => {
+                            setNewMessage(e.target.value);
+                            handleTyping(e.target.value);
+                        }}
                         placeholder="Envía un mensaje..."
                         className="rounded-full pr-12 focus-visible:ring-papu-coral bg-secondary/50 border-none"
                     />
@@ -248,9 +263,11 @@ export default function MessagesPage() {
     // Responsive state
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [otherUserTyping, setOtherUserTyping] = useState(false);
 
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
+    const typingTimeoutRef = useRef(null);
 
     // Handle Resize
     useEffect(() => {
@@ -416,6 +433,58 @@ export default function MessagesPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
     };
 
+
+    // 5. Typing Indicator Logic
+    useEffect(() => {
+        if (!selectedChat?.id || !currentUser) return;
+
+        const unsub = onSnapshot(doc(db, 'chats', selectedChat.id), (docSnapshot) => {
+            if (docSnapshot.exists()) {
+                const data = docSnapshot.data();
+                const otherUserId = selectedChat.participants.find(p => p !== currentUser.uid);
+                setOtherUserTyping(data?.typing?.[otherUserId] || false);
+            }
+        });
+
+        return unsub;
+    }, [selectedChat?.id, currentUser]);
+
+    const handleTyping = async (text) => {
+        if (!selectedChat?.id || !currentUser) return;
+
+        const chatRef = doc(db, 'chats', selectedChat.id);
+
+        // Clear existing timeout
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+
+        // Updating typing status
+        try {
+            await updateDoc(chatRef, {
+                [`typing.${currentUser.uid}`]: true
+            });
+        } catch (error) {
+            // Silently fail or use setDoc with merge if typing field doesn't exist
+            if (error.code === 'not-found' || error.message.includes('No document to update')) {
+                // Should exist, but just in case
+            } else {
+                console.error("Error updating typing status:", error);
+            }
+        }
+
+        // Set timeout to stop typing
+        typingTimeoutRef.current = setTimeout(async () => {
+            try {
+                await updateDoc(chatRef, {
+                    [`typing.${currentUser.uid}`]: false
+                });
+            } catch (error) {
+                console.error("Error clearing typing status:", error);
+            }
+        }, 2000);
+    };
+
     const handleImageSelect = async (e) => {
         const file = e.target.files?.[0];
         if (file && file.type.startsWith('image/')) {
@@ -511,6 +580,8 @@ export default function MessagesPage() {
                         setNewMessage={setNewMessage}
                         sending={sending}
                         scrollToBottom={scrollToBottom}
+                        otherUserTyping={otherUserTyping}
+                        handleTyping={handleTyping}
                     />
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8 text-center bg-background/50">
@@ -552,6 +623,8 @@ export default function MessagesPage() {
                         setNewMessage={setNewMessage}
                         sending={sending}
                         scrollToBottom={scrollToBottom}
+                        otherUserTyping={otherUserTyping}
+                        handleTyping={handleTyping}
                     />
                 </div>,
                 document.body
