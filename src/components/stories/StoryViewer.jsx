@@ -1,9 +1,11 @@
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { X, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useEffect, useState } from 'react';
 
 export default function StoryViewer({ stories, initialIndex = 0, user, onClose, onDelete, isOwner }) {
+    const navigate = useNavigate();
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const currentStory = stories[currentIndex];
 
@@ -71,7 +73,14 @@ export default function StoryViewer({ stories, initialIndex = 0, user, onClose, 
                     </div>
 
                     {/* User info */}
-                    <div className="absolute top-8 left-4 flex items-center gap-3 z-20 cursor-pointer hover:opacity-80 transition-opacity">
+                    <div
+                        className="absolute top-8 left-4 flex items-center gap-3 z-20 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onClose();
+                            navigate(`/profile/${user.username}`);
+                        }}
+                    >
                         <Avatar className="h-8 w-8 border border-white/20 shadow-sm">
                             <AvatarImage src={user.avatarUrl} />
                             <AvatarFallback>{user.username[0]}</AvatarFallback>

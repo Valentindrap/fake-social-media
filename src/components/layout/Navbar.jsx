@@ -84,15 +84,13 @@ export default function Navbar() {
             <div className="max-w-[935px] mx-auto px-4 h-[60px] flex items-center justify-between">
                 {/* Logo */}
                 <Link to="/">
-                    <motion.h1
-                        className="text-xl font-bold tracking-tight cursor-pointer select-none"
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                    <motion.div
+                        className="cursor-pointer select-none"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
                     >
-                        <span className="bg-gradient-to-r from-papu-coral via-papu-violet to-papu-lavender bg-clip-text text-transparent">
-                            Papu IG
-                        </span>
-                    </motion.h1>
+                        <img src="/logo.png" alt="Papu IG" className="h-10 w-auto" />
+                    </motion.div>
                 </Link>
 
                 {/* Search */}

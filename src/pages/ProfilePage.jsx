@@ -31,6 +31,7 @@ export default function ProfilePage() {
     useEffect(() => {
         async function fetchProfileAndPosts() {
             setLoading(true);
+            setHighlights([]); // Reset highlights to avoid showing previous user's data
             try {
                 // 1. Fetch Profile Data
                 if (!profile || profile.username !== username) {

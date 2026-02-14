@@ -64,11 +64,9 @@ export default function LoginPage() {
             >
                 {/* Logo */}
                 <div className="text-center mb-8">
-                    <h1 className="text-4xl font-bold mb-2">
-                        <span className="bg-gradient-to-r from-papu-coral via-papu-violet to-papu-lavender bg-clip-text text-transparent">
-                            Papu IG
-                        </span>
-                    </h1>
+                    <div className="flex justify-center mb-6">
+                        <img src="/logo.png" alt="Papu IG" className="h-24 w-auto drop-shadow-lg" />
+                    </div>
                     <p className="text-sm text-muted-foreground">
                         {isLogin ? 'Iniciá sesión para continuar' : 'Creá tu cuenta'}
                     </p>
