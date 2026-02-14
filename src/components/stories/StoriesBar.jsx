@@ -158,55 +158,155 @@ export default function StoriesBar() {
         }
     };
 
-    // ...
+    const closeViewer = () => setViewingStory(null);
 
-    {/* Other stories (Followed Users) */ }
-    {
-        usersWithStories.map((user, index) => (
-            <div
-                key={user.id}
-                onClick={() => openStoryViewer(user)}
-                className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer group/story"
-            >
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.05 * (index + 1) }}
+    const nextStory = () => {
+        if (viewingStory.currentIndex < viewingStory.stories.length - 1) {
+            setViewingStory(prev => ({ ...prev, currentIndex: prev.currentIndex + 1 }));
+        } else {
+            closeViewer();
+        }
+    };
+
+    const prevStory = () => {
+        if (viewingStory.currentIndex > 0) {
+            setViewingStory(prev => ({ ...prev, currentIndex: prev.currentIndex - 1 }));
+        }
+    };
+
+    const handleDeleteStory = async (storyToDelete) => {
+        if (!storyToDelete || !currentUser) return;
+
+        // If coming from child component, storyToDelete is passed.
+        // Fallback for safety (though component should drive this)
+        const storyId = storyToDelete.id;
+
+        try {
+            await deleteDoc(doc(db, 'users', currentUser.uid, 'stories', storyId));
+
+            // If it was the only story, close viewer. 
+            // If multiple, Viewer handles local state or we could update viewingStory here.
+            // For simplicity, let's close viewer to force refresh or maybe just let viewer handle UI?
+            // "StoryViewer" doesn't remove it from UI locally yet, it just calls onDelete.
+            // Let's close for now to be safe and simple.
+            closeViewer();
+
+            setMyStory(null);
+            checkMyStory();
+            setUsersWithStories(prev => {
+                // Remove user if no stories? Complex. Just refresh.
+                // We'll leave it, checkMyStory updates "My Story" circle.
+                return prev;
+            });
+        } catch (error) {
+            console.error("Error deleting story:", error);
+        }
+    };
+
+    const scroll = (direction) => {
+        if (scrollRef.current) {
+            const amount = direction === 'left' ? -200 : 200;
+            scrollRef.current.scrollBy({ left: amount, behavior: 'smooth' });
+        }
+    };
+
+    return (
+        <>
+            <div className="relative group">
+                {/* Scroll buttons */}
+                <button
+                    onClick={() => scroll('left')}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-6 w-6 rounded-full bg-background/90 shadow-md border border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-background"
                 >
-                    <div className="p-[2px] rounded-full bg-gradient-to-tr from-yellow-400 to-fuchsia-600">
-                        <div className="rounded-full border-2 border-background p-[2px] bg-background">
-                            <div className="w-[56px] h-[56px] rounded-full overflow-hidden">
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <button
+                    onClick={() => scroll('right')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 h-6 w-6 rounded-full bg-background/90 shadow-md border border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-background"
+                >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+
+                <div
+                    ref={scrollRef}
+                    className="flex gap-4 overflow-x-auto hide-scrollbar smooth-scroll py-4 px-4"
+                >
+                    {/* Your story */}
+                    <div className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer" onClick={handleUploadClick}>
+                        <div className={`relative p-[2px] rounded-full ${myStory ? 'bg-gradient-to-tr from-yellow-400 to-fuchsia-600' : 'border-2 border-border'}`}>
+                            <div className="w-[58px] h-[58px] rounded-full overflow-hidden border-2 border-background">
                                 <img
-                                    src={user.avatarUrl}
-                                    alt={user.username}
-                                    className="w-full h-full object-cover"
+                                    src={userProfile?.avatarUrl || "https://github.com/shadcn.png"}
+                                    alt="Tu historia"
+                                    className={`w-full h-full object-cover ${uploading ? 'opacity-50' : ''}`}
                                 />
                             </div>
+                            {!myStory && !uploading && (
+                                <div className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-papu-coral text-white flex items-center justify-center border-2 border-background">
+                                    <Plus className="h-3 w-3" strokeWidth={3} />
+                                </div>
+                            )}
+                            {uploading && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></div>
+                                </div>
+                            )}
                         </div>
+                        <span className="text-[11px] text-muted-foreground font-medium w-[66px] text-center truncate">
+                            {uploading ? 'Subiendo...' : 'Tu historia'}
+                        </span>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                        />
                     </div>
-                </motion.div>
-                <span className="text-[11px] text-muted-foreground font-medium w-[66px] text-center truncate group-hover/story:text-foreground transition-colors">
-                    {user.username}
-                </span>
-            </div>
-        ))
-    }
-                </div >
-            </div >
 
-        {/* Story Viewer Overlay */ }
-    {
-        viewingStory && (
-            <StoryViewer
-                stories={viewingStory.stories}
-                initialIndex={viewingStory.currentIndex}
-                user={viewingStory.user}
-                onClose={closeViewer}
-                isOwner={viewingStory.user.username === userProfile?.username}
-                onDelete={(story) => handleDeleteStory(story)}
-            />
-        )
-    }
+                    {/* Other stories (Followed Users) */}
+                    {usersWithStories.map((user, index) => (
+                        <div
+                            key={user.id}
+                            onClick={() => openStoryViewer(user)}
+                            className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer group/story"
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.05 * (index + 1) }}
+                            >
+                                <div className="p-[2px] rounded-full bg-gradient-to-tr from-yellow-400 to-fuchsia-600">
+                                    <div className="rounded-full border-2 border-background p-[2px] bg-background">
+                                        <div className="w-[56px] h-[56px] rounded-full overflow-hidden">
+                                            <img
+                                                src={user.avatarUrl}
+                                                alt={user.username}
+                                                className="w-full h-full object-cover"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                            <span className="text-[11px] text-muted-foreground font-medium w-[66px] text-center truncate group-hover/story:text-foreground transition-colors">
+                                {user.username}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Story Viewer Overlay */}
+            {viewingStory && (
+                <StoryViewer
+                    stories={viewingStory.stories}
+                    initialIndex={viewingStory.currentIndex}
+                    user={viewingStory.user}
+                    onClose={closeViewer}
+                    isOwner={viewingStory.user.username === userProfile?.username}
+                    onDelete={(story) => handleDeleteStory(story)}
+                />
+            )}
         </>
     );
 }
