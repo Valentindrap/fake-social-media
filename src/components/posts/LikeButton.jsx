@@ -33,7 +33,7 @@ export default function LikeButton({ liked, onToggle, size = 22 }) {
                         }}
                     >
                         <Heart
-                            className="text-papu-coral fill-papu-coral"
+                            className="text-red-500 fill-red-500"
                             size={size}
                             strokeWidth={0}
                         />
@@ -61,7 +61,7 @@ export default function LikeButton({ liked, onToggle, size = 22 }) {
                         {[...Array(6)].map((_, i) => (
                             <motion.div
                                 key={i}
-                                className="absolute top-1/2 left-1/2 w-1 h-1 rounded-full bg-papu-coral"
+                                className="absolute top-1/2 left-1/2 w-1 h-1 rounded-full bg-red-500"
                                 initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
                                 animate={{
                                     x: Math.cos((i * 60 * Math.PI) / 180) * 20,

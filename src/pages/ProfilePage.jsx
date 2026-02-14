@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Settings, Grid, Bookmark, Users, MoreHorizontal, Trash2, Heart, X, Plus } from 'lucide-react';
 import StoryViewer from '@/components/stories/StoryViewer';
-import { collection, query, where, getDocs, db, doc, getDoc, orderBy, limit } from '@/lib/firebase';
+import { collection, query, where, getDocs, db, doc, getDoc, orderBy, limit, deleteDoc } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useFollow } from '@/hooks/useFollow';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import PostModal from '@/components/posts/PostModal';
 
 export default function ProfilePage() {
     const { username } = useParams();
@@ -270,13 +271,36 @@ export default function ProfilePage() {
                     {highlights.map((highlight) => (
                         <div
                             key={highlight.id}
-                            className="flex flex-col items-center gap-2 cursor-pointer group"
+                            className="flex flex-col items-center gap-2 cursor-pointer group relative"
                             onClick={() => setViewingHighlight(highlight)}
+                            onContextMenu={(e) => {
+                                e.preventDefault();
+                                if (isOwnProfile) {
+                                    if (confirm(`¿Borrar historia destacada "${highlight.title}"?`)) {
+                                        import('firebase/firestore').then(({ deleteDoc, doc }) => deleteDoc(doc(db, 'users', currentUser.uid, 'highlights', highlight.id)));
+                                        setHighlights(prev => prev.filter(h => h.id !== highlight.id));
+                                    }
+                                }
+                            }}
                         >
-                            <div className="w-[60px] h-[60px] md:w-[77px] md:h-[77px] rounded-full border border-border p-[2px] bg-background">
+                            <div className="w-[60px] h-[60px] md:w-[77px] md:h-[77px] rounded-full border border-border p-[2px] bg-background relative">
                                 <div className="w-full h-full rounded-full overflow-hidden bg-secondary relative">
                                     <img src={highlight.coverImage} className="w-full h-full object-cover" />
                                 </div>
+                                {isOwnProfile && (
+                                    <button
+                                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm(`¿Borrar historia destacada "${highlight.title}"?`)) {
+                                                deleteDoc(doc(db, 'users', currentUser.uid, 'highlights', highlight.id));
+                                                setHighlights(prev => prev.filter(h => h.id !== highlight.id));
+                                            }
+                                        }}
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                )}
                             </div>
                             <span className="text-xs font-semibold truncate max-w-[70px] text-center">{highlight.title}</span>
                         </div>
@@ -340,80 +364,14 @@ export default function ProfilePage() {
                 </div>
             )}
 
-            {/* Post Modal */}
             {selectedPost && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedPost(null)}>
-                    <div className="bg-background max-w-4xl w-full max-h-[90vh] rounded-lg overflow-hidden flex flex-col md:flex-row shadow-2xl" onClick={e => e.stopPropagation()}>
-
-                        {/* Image Side */}
-                        <div className="flex-1 bg-black flex items-center justify-center min-h-[300px] md:min-h-[500px]">
-                            <img src={selectedPost.image} className="max-w-full max-h-full object-contain" />
-                        </div>
-
-                        {/* Details Side */}
-                        <div className="w-full md:w-[350px] flex flex-col border-l border-border">
-                            {/* Header */}
-                            <div className="p-4 border-b border-border flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="h-8 w-8 border border-border">
-                                        <AvatarImage src={profile.avatarUrl} />
-                                        <AvatarFallback>{profile.username[0]}</AvatarFallback>
-                                    </Avatar>
-                                    <span className="font-semibold text-sm">{profile.username}</span>
-                                </div>
-                                {currentUser?.uid === selectedPost.userId && (
-                                    <div className="relative">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10"
-                                            onClick={async () => {
-                                                if (confirm('¿Estás seguro de borrar esta publicación?')) {
-                                                    try {
-                                                        // Using dynamic import or direct? Let's use direct if imported, or dynamic but fix import
-                                                        await import('firebase/firestore').then(({ deleteDoc, doc }) => deleteDoc(doc(db, 'posts', selectedPost.id)));
-                                                        setPosts(prev => prev.filter(p => p.id !== selectedPost.id)); // Optimistic remove
-                                                        setSelectedPost(null);
-                                                    } catch (e) {
-                                                        console.error("Error borrando:", e);
-                                                    }
-                                                }
-                                            }}
-                                        >
-                                            <Trash2 className="h-5 w-5" />
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Caption / Comments Area */}
-                            <div className="flex-1 p-4 overflow-y-auto text-sm space-y-4">
-                                <div>
-                                    <span className="font-semibold mr-2">{profile.username}</span>
-                                    <span>{selectedPost.caption}</span>
-                                </div>
-                            </div>
-
-                            {/* Actions Footer */}
-                            <div className="p-4 border-t border-border">
-                                <div className="flex items-center gap-4 mb-2">
-                                    <Heart className={`h-6 w-6 ${selectedPost.likedBy?.includes(currentUser?.uid) ? 'fill-red-500 text-red-500' : ''}`} />
-                                    <div className="flex-1"></div>
-                                    <Bookmark className="h-6 w-6" />
-                                </div>
-                                <div className="font-bold text-sm mb-1">{selectedPost.likes || 0} Me gusta</div>
-                                <div className="text-[10px] text-muted-foreground uppercase">
-                                    {selectedPost.createdAt?.toDate ? selectedPost.createdAt.toDate().toLocaleDateString() : 'Hace un momento'}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Close Button Mobile */}
-                    <button className="absolute top-4 right-4 text-white md:hidden" onClick={() => setSelectedPost(null)}>
-                        <X className="h-8 w-8" />
-                    </button>
-                </div>
+                <PostModal
+                    post={selectedPost}
+                    user={profile}
+                    currentUser={currentUser}
+                    onClose={() => setSelectedPost(null)}
+                    onPostDeleted={(postId) => setPosts(prev => prev.filter(p => p.id !== postId))}
+                />
             )}
 
             {/* Create Highlight Dialog - Simplified for MVP */}

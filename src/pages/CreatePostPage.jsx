@@ -1,12 +1,16 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ImagePlus, X, ArrowLeft } from 'lucide-react';
+import { ImagePlus, X, ArrowLeft, UserPlus, Search, User } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { compressImage } from '@/lib/imageUtils';
 import { db, collection, addDoc, serverTimestamp } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useDebounce } from '@/hooks/useDebounce';
+import { query, where, getDocs } from '@/lib/firebase';
 
 export default function CreatePostPage() {
     const { currentUser, userProfile } = useAuth();
@@ -17,7 +21,65 @@ export default function CreatePostPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [dragActive, setDragActive] = useState(false);
+
+    // Tagging State
+    const [showTagging, setShowTagging] = useState(false);
+    const [taggedUsers, setTaggedUsers] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [searching, setSearching] = useState(false);
+
     const fileInputRef = useRef(null);
+
+    // Search Users Effect
+    const debouncedSearch = useDebounce(searchTerm, 500);
+
+    // Search Effect
+    useEffect(() => {
+        const searchUsers = async () => {
+            if (searchTerm.trim().length > 0) {
+                setSearching(true);
+                try {
+                    const q = query(
+                        collection(db, 'users'),
+                        where('username', '>=', searchTerm.toLowerCase()),
+                        where('username', '<=', searchTerm.toLowerCase() + '\uf8ff')
+                    );
+                    const snapshot = await getDocs(q);
+                    const users = snapshot.docs
+                        .map(doc => ({ id: doc.id, ...doc.data() }))
+                        .filter(u => u.id !== currentUser?.uid && !taggedUsers.some(t => t.uid === u.id));
+                    setSearchResults(users);
+                } catch (err) {
+                    console.error("Error searching:", err);
+                } finally {
+                    setSearching(false);
+                }
+            } else {
+                setSearchResults([]);
+            }
+        };
+
+        const timer = setTimeout(searchUsers, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm, currentUser, taggedUsers]);
+
+    const handleTagUser = (user) => {
+        setTaggedUsers([...taggedUsers, { uid: user.id, username: user.username, x: 0.5, y: 0.5 }]);
+        setSearchTerm('');
+        setSearchResults([]);
+        // setShowTagging(false); // Optional: close or keep open
+    };
+
+    const removeTag = (uid) => {
+        setTaggedUsers(taggedUsers.filter(t => t.uid !== uid));
+    };
+
+    // I will add useEffect to the first chunk if I can, but I can't edit line 1 easily with multi-replace safely if I don't see it in my chunks above.
+    // Actually, I can just replace the whole file content or use a standard replace for line 1.
+    // Let me try to use `useEffect` and if it fails, I'll fix it.
+    // better: use `React.useEffect` if React is default imported? No.
+    // I will update line 1 in a separate chunk.
 
     const handleFile = async (file) => {
         if (file && file.type.startsWith('image/')) {
@@ -74,6 +136,7 @@ export default function CreatePostPage() {
                 likes: 0,
                 comments: [],
                 createdAt: serverTimestamp(),
+                taggedUsers: taggedUsers.map(t => ({ uid: t.uid, username: t.username, x: 0.5, y: 0.5 })) // simplified
             });
             navigate('/');
         } catch (error) {
@@ -159,6 +222,87 @@ export default function CreatePostPage() {
                                 onChange={(e) => setCaption(e.target.value)}
                                 className="min-h-[100px] resize-none border-none focus-visible:ring-0 p-0 text-base"
                             />
+                        </div>
+
+                        {/* Tagging Section */}
+                        <div className="border-t border-border pt-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <Button
+                                    variant="ghost"
+                                    className="p-0 h-auto font-semibold text-sm hover:bg-transparent"
+                                    onClick={() => setShowTagging(!showTagging)}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <UserPlus className="h-5 w-5" />
+                                        <span>Etiquetar personas</span>
+                                        {taggedUsers.length > 0 && (
+                                            <span className="bg-secondary text-secondary-foreground text-xs px-2 py-0.5 rounded-full">
+                                                {taggedUsers.length}
+                                            </span>
+                                        )}
+                                    </div>
+                                </Button>
+                            </div>
+
+                            <AnimatePresence>
+                                {showTagging && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="bg-secondary/30 rounded-xl p-3 mb-4">
+                                            <div className="relative mb-3">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    placeholder="Buscar usuario..."
+                                                    value={searchTerm}
+                                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                                    className="pl-9 h-9 bg-background border-none"
+                                                />
+                                            </div>
+
+                                            {/* Results */}
+                                            {searching ? (
+                                                <div className="flex justify-center py-2"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div></div>
+                                            ) : searchResults.length > 0 ? (
+                                                <div className="max-h-[150px] overflow-y-auto space-y-1">
+                                                    {searchResults.map(user => (
+                                                        <div
+                                                            key={user.id}
+                                                            onClick={() => handleTagUser(user)}
+                                                            className="flex items-center gap-2 p-2 hover:bg-background rounded-lg cursor-pointer transition-colors"
+                                                        >
+                                                            <Avatar className="h-8 w-8">
+                                                                <AvatarImage src={user.avatarUrl} />
+                                                                <AvatarFallback>{user.username[0]}</AvatarFallback>
+                                                            </Avatar>
+                                                            <span className="text-sm font-medium">{user.username}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : searchTerm && (
+                                                <p className="text-xs text-center text-muted-foreground py-2">No se encontraron usuarios</p>
+                                            )}
+
+                                            {/* Selected Tags */}
+                                            {taggedUsers.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border/50">
+                                                    {taggedUsers.map(tag => (
+                                                        <div key={tag.uid} className="flex items-center gap-1 bg-background text-xs font-semibold px-2 py-1 rounded-md border border-border">
+                                                            <span>@{tag.username}</span>
+                                                            <button onClick={() => removeTag(tag.uid)} className="text-muted-foreground hover:text-destructive">
+                                                                <X className="h-3 w-3" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </div>
                 )}

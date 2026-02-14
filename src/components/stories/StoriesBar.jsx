@@ -216,20 +216,20 @@ export default function StoriesBar() {
                 {/* Scroll buttons */}
                 <button
                     onClick={() => scroll('left')}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-6 w-6 rounded-full bg-background/90 shadow-md border border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-background"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-background/60 backdrop-blur-md shadow-lg border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 text-foreground"
                 >
-                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <ChevronLeft className="h-4 w-4" />
                 </button>
                 <button
                     onClick={() => scroll('right')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 h-6 w-6 rounded-full bg-background/90 shadow-md border border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-background"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-20 h-8 w-8 rounded-full bg-background/60 backdrop-blur-md shadow-lg border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 text-foreground"
                 >
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    <ChevronRight className="h-4 w-4" />
                 </button>
 
                 <div
                     ref={scrollRef}
-                    className="flex gap-4 overflow-x-auto hide-scrollbar smooth-scroll py-4 px-4"
+                    className="flex gap-4 overflow-x-auto hide-scrollbar smooth-scroll pt-2 pb-4 px-1"
                 >
                     {/* Your story */}
                     <div className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer" onClick={handleUploadClick}>

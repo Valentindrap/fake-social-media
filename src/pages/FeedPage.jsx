@@ -67,7 +67,7 @@ export default function FeedPage() {
     return (
         <div className="max-w-[470px] mx-auto md:py-8">
             {/* Stories */}
-            <div className="bg-card border-b border-border/40 md:border md:border-border/60 md:rounded-xl md:mb-4">
+            <div className="mb-2 md:mb-6">
                 <StoriesBar />
             </div>
 
