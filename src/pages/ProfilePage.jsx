@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import VerifiedBadge from '@/components/ui/VerifiedBadge';
 import { formatCompactNumber } from '@/lib/formatUtils';
 import PostModal from '@/components/posts/PostModal';
+import FollowListModal from '@/components/profile/FollowListModal';
 
 export default function ProfilePage() {
     const { username } = useParams();
@@ -29,6 +30,7 @@ export default function ProfilePage() {
     const [viewingStory, setViewingStory] = useState(null);
     const [showStatBooster, setShowStatBooster] = useState(false);
     const [clickCount, setClickCount] = useState(0);
+    const [followModal, setFollowModal] = useState(null); // { title: 'Seguidores', uids: [...] }
 
     const { isFollowing, toggleFollow } = useFollow(profile?.id);
 
@@ -262,12 +264,25 @@ export default function ProfilePage() {
                         )}
                     </div>
 
-                    <div className="flex justify-center md:justify-start gap-8 mb-4 text-sm md:text-base">
+                    <div className="flex justify-center md:justify-start gap-8 mb-4 text-sm md:text-base cursor-default">
                         <span><span className="font-semibold">{formatCompactNumber(posts.length)}</span> publicaciones</span>
-                        <span onClick={handleBoostTrigger} className={currentUser?.email === 'valentindrap01@gmail.com' ? "cursor-help" : ""}>
-                            <span className="font-semibold">{formatCompactNumber(profile.followers || 0)}</span> seguidores
+                        <span
+                            onClick={handleBoostTrigger}
+                            className={currentUser?.email === 'valentindrap01@gmail.com' ? "cursor-help" : ""}
+                        >
+                            <span
+                                className="hover:underline cursor-pointer"
+                                onClick={() => setFollowModal({ title: 'Seguidores', uids: profile.followersList || [] })}
+                            >
+                                <span className="font-semibold">{formatCompactNumber(profile.followers || 0)}</span> seguidores
+                            </span>
                         </span>
-                        <span><span className="font-semibold">{formatCompactNumber(profile.following || 0)}</span> seguidos</span>
+                        <span
+                            className="hover:underline cursor-pointer"
+                            onClick={() => setFollowModal({ title: 'Seguidos', uids: profile.followingList || [] })}
+                        >
+                            <span className="font-semibold">{formatCompactNumber(profile.following || 0)}</span> seguidos
+                        </span>
                     </div>
 
                     <div className="text-sm hidden md:block">
@@ -457,6 +472,17 @@ export default function ProfilePage() {
                     onUpdate={(updatedData) => setProfile(prev => ({ ...prev, ...updatedData }))}
                 />
             )}
+
+            {/* Follow List Modal */}
+            <AnimatePresence>
+                {followModal && (
+                    <FollowListModal
+                        title={followModal.title}
+                        uids={followModal.uids}
+                        onClose={() => setFollowModal(null)}
+                    />
+                )}
+            </AnimatePresence>
 
             {/* Global Chaos Mode (Confetti) */}
             {profile.chaosActive && <ConfettiRain />}

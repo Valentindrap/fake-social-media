@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 const SAMPLE_REELS = [
     {
         id: '1',
-        url: 'https://player.vimeo.com/external/370331493.sd.mp4?s=7b9f1d99621359f4d9ecada43f3b9bf05bc70e1c&profile_id=139&oauth2_token_id=57447761',
+        url: 'https://mixkit.imgix.net/videos/preview/mixkit-tree-with-yellow-leaves-in-the-wind-1181-large.mp4',
         user: {
             username: 'nature_lover',
             avatar: 'https://images.pexels.com/users/avatars/123456/nature-1.jpeg',
@@ -19,7 +19,7 @@ const SAMPLE_REELS = [
     },
     {
         id: '2',
-        url: 'https://player.vimeo.com/external/469221049.sd.mp4?s=4e4d58853767f4075e7a9b7f58b73f88f0003b41&profile_id=139&oauth2_token_id=57447761',
+        url: 'https://mixkit.imgix.net/videos/preview/mixkit-city-lights-at-night-with-bokeh-effect-150-large.mp4',
         user: {
             username: 'city_vibes',
             avatar: 'https://images.pexels.com/users/avatars/654321/city-1.jpeg',
@@ -31,7 +31,7 @@ const SAMPLE_REELS = [
     },
     {
         id: '3',
-        url: 'https://player.vimeo.com/external/517090025.sd.mp4?s=f0f5b9967201c70e304b6b66e138888e2c0e8633&profile_id=139&oauth2_token_id=57447761',
+        url: 'https://mixkit.imgix.net/videos/preview/mixkit-girl-running-on-the-beach-at-sunset-1249-large.mp4',
         user: {
             username: 'fitness_pro',
             avatar: 'https://images.pexels.com/users/avatars/987654/fit-1.jpeg',
