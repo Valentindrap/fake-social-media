@@ -174,8 +174,8 @@ export default function CreatePostPage() {
     };
 
     const handleSubmit = async () => {
-        // Validate: need either image or poll
-        if (!image && !showPoll) return;
+        // Validate: need either media or poll
+        if (mediaFiles.length === 0 && !showPoll) return;
         if (showPoll && (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2)) {
             setError('La encuesta necesita una pregunta y al menos 2 opciones');
             return;
