@@ -145,6 +145,7 @@ export default function PostCard({ post }) {
                 text: comment,
                 userId: currentUser.uid,
                 username: userProfile.username,
+                isVerified: userProfile.isVerified || false,
                 createdAt: serverTimestamp()
             });
 
@@ -384,7 +385,7 @@ export default function PostCard({ post }) {
                     <div className="flex flex-col">
                         <Link to={`/profile/${post.user.username}`} className="text-sm font-bold leading-tight hover:text-papu-coral transition-colors flex items-center gap-1">
                             {post.user.username}
-                            {post.user.isVerified && <VerifiedBadge className="w-3.5 h-3.5" />}
+                            {(postUser?.isVerified || post.user.isVerified) && <VerifiedBadge className="w-3.5 h-3.5" />}
                         </Link>
                         <span className="text-[11px] text-muted-foreground font-medium leading-tight">
                             {timeAgo}
@@ -678,7 +679,7 @@ export default function PostCard({ post }) {
                 <div className="text-[13px] mt-1.5 leading-relaxed flex items-center gap-1 flex-wrap">
                     <Link to={`/profile/${post.user.username}`} className="font-semibold hover:underline flex items-center gap-1 mr-1">
                         {post.user.username}
-                        {post.user.isVerified && <VerifiedBadge className="w-3 h-3" />}
+                        {(postUser?.isVerified || post.user.isVerified) && <VerifiedBadge className="w-3 h-3" />}
                     </Link>
                     <span>{post.caption}</span>
                 </div>

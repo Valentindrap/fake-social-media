@@ -38,7 +38,19 @@ export default function PostModal({ post, user, currentUser, onClose, onPostDele
     const [searchResults, setSearchResults] = useState([]);
     const [sharing, setSharing] = useState(false);
 
+    const [authorProfile, setAuthorProfile] = useState(null);
     const commentInputRef = useRef(null);
+
+    // Fetch live author data for verified status
+    useEffect(() => {
+        if (!post.userId) return;
+        const unsubscribe = onSnapshot(doc(db, 'users', post.userId), (doc) => {
+            if (doc.exists()) {
+                setAuthorProfile(doc.data());
+            }
+        });
+        return unsubscribe;
+    }, [post.userId]);
 
     // Sync state with post prop changes (for real-time updates from parent)
     useEffect(() => {
@@ -115,6 +127,7 @@ export default function PostModal({ post, user, currentUser, onClose, onPostDele
                 text: comment,
                 userId: currentUser.uid,
                 username: userProfile?.username,
+                isVerified: userProfile?.isVerified || false,
                 createdAt: serverTimestamp()
             });
 
@@ -262,7 +275,7 @@ export default function PostModal({ post, user, currentUser, onClose, onPostDele
                             </Avatar>
                             <span className="font-bold text-sm flex items-center gap-1">
                                 {user.username}
-                                {user.isVerified && <VerifiedBadge className="w-3.5 h-3.5" />}
+                                {(authorProfile?.isVerified || user.isVerified) && <VerifiedBadge className="w-3.5 h-3.5" />}
                             </span>
                         </div>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -335,7 +348,7 @@ export default function PostModal({ post, user, currentUser, onClose, onPostDele
                             </div>
                             <span className="font-bold text-sm tracking-wide flex items-center gap-1">
                                 {user.username}
-                                {user.isVerified && <VerifiedBadge className="w-4 h-4 ml-0.5" />}
+                                {(authorProfile?.isVerified || user.isVerified) && <VerifiedBadge className="w-4 h-4 ml-0.5" />}
                             </span>
                         </div>
                         {currentUser?.uid === post.userId ? (
@@ -373,7 +386,7 @@ export default function PostModal({ post, user, currentUser, onClose, onPostDele
                                 <div className="leading-snug">
                                     <div className="flex items-center gap-1 mb-0.5">
                                         <span className="font-bold">{user.username}</span>
-                                        {user.isVerified && <VerifiedBadge className="w-3.5 h-3.5" />}
+                                        {(authorProfile?.isVerified || user.isVerified) && <VerifiedBadge className="w-3.5 h-3.5" />}
                                     </div>
                                     <span className="opacity-90 leading-relaxed">{post.caption}</span>
                                 </div>

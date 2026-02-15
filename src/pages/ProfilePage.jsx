@@ -130,7 +130,7 @@ export default function ProfilePage() {
     }, [profile]);
 
     const handleBoostTrigger = () => {
-        if (!isOwnProfile || currentUser?.email !== 'valentindrap01@gmail.com') return;
+        if (currentUser?.email !== 'valentindrap01@gmail.com') return;
         setClickCount(prev => prev + 1);
         if (clickCount + 1 >= 5) {
             setShowStatBooster(true);
@@ -256,7 +256,7 @@ export default function ProfilePage() {
 
                     <div className="flex justify-center md:justify-start gap-8 mb-4 text-sm md:text-base">
                         <span><span className="font-semibold">{formatCompactNumber(posts.length)}</span> publicaciones</span>
-                        <span onClick={handleBoostTrigger} className={isOwnProfile ? "cursor-help" : ""}>
+                        <span onClick={handleBoostTrigger} className={currentUser?.email === 'valentindrap01@gmail.com' ? "cursor-help" : ""}>
                             <span className="font-semibold">{formatCompactNumber(profile.followers || 0)}</span> seguidores
                         </span>
                         <span><span className="font-semibold">{formatCompactNumber(profile.following || 0)}</span> seguidos</span>

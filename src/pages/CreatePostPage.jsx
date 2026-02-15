@@ -201,6 +201,7 @@ export default function CreatePostPage() {
                 user: {
                     username: userProfile.username || 'usuario',
                     avatar: userProfile.avatarUrl || '',
+                    isVerified: userProfile.isVerified || false,
                 },
                 // For backward compatibility we keep 'image' as the first media component
                 image: mediaFiles.length > 0 ? mediaFiles[0].url : null,
