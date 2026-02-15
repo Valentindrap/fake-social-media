@@ -11,6 +11,7 @@ import { Send, ArrowLeft, Image as ImageIcon, X, Check, CheckCheck } from 'lucid
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { compressImage } from '@/lib/imageUtils';
+import { sendPushNotification } from '@/lib/notificationUtils';
 
 // Sub-component for individual chat items to handle live user data
 const ChatListItem = ({ chat, currentUser, selectedChat, setSelectedChat }) => {
@@ -524,6 +525,15 @@ export default function MessagesPage() {
                 },
                 updatedAt: serverTimestamp()
             }, { merge: true });
+
+            // Send Push Notification
+            const otherUserId = selectedChat.participants.find(p => p !== currentUser.uid);
+            await sendPushNotification(
+                otherUserId,
+                `Nuevo mensaje de ${userProfile?.username || 'Usuario'}`,
+                msgImage ? '📷 Imagen' : msgText,
+                { chatId: selectedChat.id }
+            );
 
         } catch (error) {
             console.error("Error sending message:", error);
