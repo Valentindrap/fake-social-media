@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Home, Search, PlusSquare, Heart, User } from 'lucide-react';
+import { Home, Search, PlusSquare, Heart, User, Clapperboard } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
@@ -11,6 +11,7 @@ export default function MobileNav() {
     const navItems = [
         { icon: Home, label: 'Inicio', path: '/' },
         { icon: Search, label: 'Buscar', path: '/search' },
+        { icon: Clapperboard, label: 'Reels', path: '/reels' },
         { icon: PlusSquare, label: 'Crear', path: '/create' },
         { icon: Heart, label: 'Actividad', path: '/notifications' },
         {

@@ -9,47 +9,49 @@ import SearchPage from '@/pages/SearchPage';
 import CreatePostPage from '@/pages/CreatePostPage';
 import NotificationsPage from '@/pages/NotificationsPage';
 import MessagesPage from '@/pages/MessagesPage';
+import ReelsPage from '@/pages/ReelsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import NotificationManager from '@/components/common/NotificationManager';
 
 function PrivateRoute({ children }) {
-  const { currentUser, loading } = useAuth();
+    const { currentUser, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-papu-coral"></div>
-      </div>
-    );
-  }
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-papu-coral"></div>
+            </div>
+        );
+    }
 
-  return currentUser ? children : <Navigate to="/login" />;
+    return currentUser ? children : <Navigate to="/login" />;
 }
 
 export default function App() {
-  return (
-    <BrowserRouter>
-      <AuthProvider>
-        <NotificationManager />
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
+    return (
+        <BrowserRouter>
+            <AuthProvider>
+                <NotificationManager />
+                <Routes>
+                    <Route path="/login" element={<LoginPage />} />
 
-          <Route path="/" element={
-            <PrivateRoute>
-              <Layout />
-            </PrivateRoute>
-          }>
-            <Route index element={<FeedPage />} />
-            <Route path="profile/:username" element={<ProfilePage />} />
-            <Route path="edit-profile" element={<EditProfilePage />} />
-            <Route path="search" element={<SearchPage />} />
-            <Route path="create" element={<CreatePostPage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="messages" element={<MessagesPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
-  );
+                    <Route path="/" element={
+                        <PrivateRoute>
+                            <Layout />
+                        </PrivateRoute>
+                    }>
+                        <Route index element={<FeedPage />} />
+                        <Route path="profile/:username" element={<ProfilePage />} />
+                        <Route path="edit-profile" element={<EditProfilePage />} />
+                        <Route path="search" element={<SearchPage />} />
+                        <Route path="create" element={<CreatePostPage />} />
+                        <Route path="notifications" element={<NotificationsPage />} />
+                        <Route path="messages" element={<MessagesPage />} />
+                        <Route path="reels" element={<ReelsPage />} />
+                        <Route path="*" element={<NotFoundPage />} />
+                    </Route>
+                </Routes>
+            </AuthProvider>
+        </BrowserRouter>
+    );
 }

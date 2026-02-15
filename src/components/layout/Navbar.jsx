@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Search, PlusSquare, Heart, MessageCircle, Sun, Moon, Menu, LogOut, Settings, User } from 'lucide-react';
+import { Home, Search, PlusSquare, Heart, MessageCircle, Sun, Moon, Menu, LogOut, Settings, User, Clapperboard } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { Input } from '@/components/ui/input';
@@ -118,6 +118,9 @@ export default function Navbar() {
                 <div className="flex items-center gap-1">
                     <Link to="/">
                         <NavIcon icon={Home} label="Inicio" />
+                    </Link>
+                    <Link to="/reels">
+                        <NavIcon icon={Clapperboard} label="Reels" />
                     </Link>
                     <Link to="/messages">
                         <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
