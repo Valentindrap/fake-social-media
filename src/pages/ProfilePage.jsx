@@ -522,6 +522,7 @@ function StatBooster({ profile, onClose, onUpdate }) {
     const [displayName, setDisplayName] = useState(profile.displayName || '');
     const [bio, setBio] = useState(profile.bio || '');
     const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl || '');
+    const [isVerified, setIsVerified] = useState(profile.isVerified || false);
     const [godTitle, setGodTitle] = useState(profile.godTitle || '');
     const [chaosActive, setChaosActive] = useState(profile.chaosActive || false);
     const [glitching, setGlitching] = useState(false);
