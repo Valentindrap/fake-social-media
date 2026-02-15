@@ -10,6 +10,7 @@ import CreatePostPage from '@/pages/CreatePostPage';
 import NotificationsPage from '@/pages/NotificationsPage';
 import MessagesPage from '@/pages/MessagesPage';
 import NotFoundPage from '@/pages/NotFoundPage';
+import NotificationManager from '@/components/common/NotificationManager';
 
 function PrivateRoute({ children }) {
   const { currentUser, loading } = useAuth();
@@ -29,6 +30,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <NotificationManager />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
