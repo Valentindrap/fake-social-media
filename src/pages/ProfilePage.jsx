@@ -9,6 +9,8 @@ import { useFollow } from '@/hooks/useFollow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import VerifiedBadge from '@/components/ui/VerifiedBadge';
+import { formatCompactNumber } from '@/lib/formatUtils';
 import PostModal from '@/components/posts/PostModal';
 
 export default function ProfilePage() {
@@ -214,11 +216,9 @@ export default function ProfilePage() {
 
                 <section className="flex-1 min-w-0 w-full">
                     <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
-                        <div className="flex items-center gap-1 justify-center md:justify-start">
+                        <div className="flex items-center gap-1.5 justify-center md:justify-start">
                             <h2 className="text-xl md:text-2xl font-normal truncate">{profile.username}</h2>
-                            {profile.isVerified && (
-                                <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-500 stroke-background" />
-                            )}
+                            {profile.isVerified && <VerifiedBadge className="w-5 h-5" />}
                         </div>
                         {isOwnProfile ? (
                             <div className="flex gap-2 justify-center md:justify-start">
@@ -255,11 +255,11 @@ export default function ProfilePage() {
                     </div>
 
                     <div className="flex justify-center md:justify-start gap-8 mb-4 text-sm md:text-base">
-                        <span><span className="font-semibold">{posts.length}</span> publicaciones</span>
+                        <span><span className="font-semibold">{formatCompactNumber(posts.length)}</span> publicaciones</span>
                         <span onClick={handleBoostTrigger} className={isOwnProfile ? "cursor-help" : ""}>
-                            <span className="font-semibold">{profile.followers || 0}</span> seguidores
+                            <span className="font-semibold">{formatCompactNumber(profile.followers || 0)}</span> seguidores
                         </span>
-                        <span><span className="font-semibold">{profile.following || 0}</span> seguidos</span>
+                        <span><span className="font-semibold">{formatCompactNumber(profile.following || 0)}</span> seguidos</span>
                     </div>
 
                     <div className="text-sm hidden md:block">
@@ -505,7 +505,10 @@ function StatBooster({ profile, onClose, onUpdate }) {
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-wider">Seguidores</label>
+                            <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-wider flex justify-between">
+                                <span>Seguidores</span>
+                                <span className="text-papu-coral">({formatCompactNumber(followers)})</span>
+                            </label>
                             <Input
                                 type="number"
                                 value={followers}
@@ -514,7 +517,10 @@ function StatBooster({ profile, onClose, onUpdate }) {
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-wider">Seguidos</label>
+                            <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-wider flex justify-between">
+                                <span>Seguidos</span>
+                                <span className="text-papu-coral">({formatCompactNumber(following)})</span>
+                            </label>
                             <Input
                                 type="number"
                                 value={following}

@@ -12,6 +12,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { compressImage } from '@/lib/imageUtils';
 import { sendPushNotification } from '@/lib/notificationUtils';
+import VerifiedBadge from '@/components/ui/VerifiedBadge';
 
 // Sub-component for individual chat items to handle live user data
 const ChatListItem = ({ chat, currentUser, selectedChat, setSelectedChat }) => {
@@ -39,7 +40,10 @@ const ChatListItem = ({ chat, currentUser, selectedChat, setSelectedChat }) => {
                 <AvatarFallback>{otherUser?.username?.[0]?.toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm truncate">{otherUser?.username}</div>
+                <div className="font-semibold text-sm truncate flex items-center gap-1">
+                    {otherUser?.username}
+                    {otherUser?.isVerified && <VerifiedBadge className="w-3.5 h-3.5" />}
+                </div>
                 <div className="text-xs text-muted-foreground truncate flex items-center gap-1">
                     {chat.lastMessage?.senderId === currentUser?.uid && 'Tú: '}
                     {chat.lastMessage?.text || 'Nuevo chat'}
@@ -109,8 +113,11 @@ const ChatContent = memo(({
                         <AvatarFallback>{otherUserProfile?.username?.[0]?.toUpperCase()}</AvatarFallback>
                     </Avatar>
                 </Link>
-                <div className="flex flex-col leading-tight">
-                    <span className="font-semibold">{otherUserProfile?.username || selectedChat?.otherUser?.username}</span>
+                <div className="flex flex-col leading-tight overflow-hidden">
+                    <span className="font-semibold flex items-center gap-1">
+                        <span className="truncate">{otherUserProfile?.username || selectedChat?.otherUser?.username}</span>
+                        {(otherUserProfile?.isVerified || selectedChat?.otherUser?.isVerified) && <VerifiedBadge className="w-4 h-4" />}
+                    </span>
                     {otherUserProfile?.isOnline && <span className="text-[10px] text-green-500">En línea</span>}
                 </div>
             </div>

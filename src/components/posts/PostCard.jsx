@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { MessageCircle, Send, Bookmark, MoreHorizontal, Heart, User, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import LikeButton from './LikeButton';
 import PollOption from './PollOption';
+import VerifiedBadge from '@/components/ui/VerifiedBadge';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -381,8 +382,9 @@ export default function PostCard({ post }) {
                         </div>
                     </Link>
                     <div className="flex flex-col">
-                        <Link to={`/profile/${post.user.username}`} className="text-sm font-bold leading-tight hover:text-papu-coral transition-colors">
+                        <Link to={`/profile/${post.user.username}`} className="text-sm font-bold leading-tight hover:text-papu-coral transition-colors flex items-center gap-1">
                             {post.user.username}
+                            {post.user.isVerified && <VerifiedBadge className="w-3.5 h-3.5" />}
                         </Link>
                         <span className="text-[11px] text-muted-foreground font-medium leading-tight">
                             {timeAgo}
@@ -673,12 +675,13 @@ export default function PostCard({ post }) {
                 </motion.p>
 
                 {/* Caption */}
-                <p className="text-[13px] mt-1.5 leading-relaxed">
-                    <Link to={`/profile/${post.user.username}`} className="font-semibold mr-1.5 hover:underline">
+                <div className="text-[13px] mt-1.5 leading-relaxed flex items-center gap-1 flex-wrap">
+                    <Link to={`/profile/${post.user.username}`} className="font-semibold hover:underline flex items-center gap-1 mr-1">
                         {post.user.username}
+                        {post.user.isVerified && <VerifiedBadge className="w-3 h-3" />}
                     </Link>
-                    {post.caption}
-                </p>
+                    <span>{post.caption}</span>
+                </div>
 
                 {/* Comments */}
                 {comments.length > 2 && !showAllComments && (
@@ -700,12 +703,13 @@ export default function PostCard({ post }) {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.2 }}
                             >
-                                <p className="text-[13px] leading-relaxed">
-                                    <Link to={`/profile/${c.username}`} className="font-semibold mr-1.5 hover:underline">
+                                <div className="text-[13px] leading-relaxed flex items-center gap-1 flex-wrap">
+                                    <Link to={`/profile/${c.username}`} className="font-semibold hover:underline flex items-center gap-1 mr-1">
                                         {c.username}
+                                        {c.isVerified && <VerifiedBadge className="w-2.5 h-2.5" />}
                                     </Link>
-                                    {c.text}
-                                </p>
+                                    <span>{c.text}</span>
+                                </div>
                                 {(currentUser?.uid === post.userId || currentUser?.uid === c.userId) && (
                                     <button
                                         onClick={() => handleDeleteComment(c.id)}

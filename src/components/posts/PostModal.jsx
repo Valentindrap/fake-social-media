@@ -17,6 +17,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useFollow } from '@/hooks/useFollow';
 import { createNotification } from '@/lib/notificationUtils';
 import { Link } from 'react-router-dom';
+import VerifiedBadge from '@/components/ui/VerifiedBadge';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function PostModal({ post, user, currentUser, onClose, onPostDeleted }) {
@@ -259,7 +260,10 @@ export default function PostModal({ post, user, currentUser, onClose, onPostDele
                                 <AvatarImage src={user.avatarUrl} />
                                 <AvatarFallback>{user.username[0]}</AvatarFallback>
                             </Avatar>
-                            <span className="font-bold text-sm">{user.username}</span>
+                            <span className="font-bold text-sm flex items-center gap-1">
+                                {user.username}
+                                {user.isVerified && <VerifiedBadge className="w-3.5 h-3.5" />}
+                            </span>
                         </div>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
                             <MoreHorizontal className="h-5 w-5" />
@@ -329,7 +333,10 @@ export default function PostModal({ post, user, currentUser, onClose, onPostDele
                                     <AvatarFallback>{user.username[0]}</AvatarFallback>
                                 </Avatar>
                             </div>
-                            <span className="font-bold text-sm tracking-wide">{user.username}</span>
+                            <span className="font-bold text-sm tracking-wide flex items-center gap-1">
+                                {user.username}
+                                {user.isVerified && <VerifiedBadge className="w-4 h-4 ml-0.5" />}
+                            </span>
                         </div>
                         {currentUser?.uid === post.userId ? (
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={handleDelete}>
@@ -364,7 +371,10 @@ export default function PostModal({ post, user, currentUser, onClose, onPostDele
                             </Avatar>
                             <div className="flex-1 space-y-1">
                                 <div className="leading-snug">
-                                    <span className="font-bold mr-2">{user.username}</span>
+                                    <div className="flex items-center gap-1 mb-0.5">
+                                        <span className="font-bold">{user.username}</span>
+                                        {user.isVerified && <VerifiedBadge className="w-3.5 h-3.5" />}
+                                    </div>
                                     <span className="opacity-90 leading-relaxed">{post.caption}</span>
                                 </div>
                                 <div className="text-xs text-muted-foreground font-medium">
@@ -383,7 +393,10 @@ export default function PostModal({ post, user, currentUser, onClose, onPostDele
                                 <div className="flex-1 group/comment">
                                     <div className="flex items-start justify-between">
                                         <div className="text-[13px] leading-snug">
-                                            <span className="font-bold mr-2">{c.username}</span>
+                                            <div className="flex items-center gap-1 mb-0.5">
+                                                <span className="font-bold">{c.username}</span>
+                                                {c.isVerified && <VerifiedBadge className="w-3 h-3" />}
+                                            </div>
                                             <span className="opacity-80">{c.text}</span>
                                         </div>
                                         {(currentUser?.uid === post.userId || currentUser?.uid === c.userId) && (
