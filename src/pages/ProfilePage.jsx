@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Grid, Bookmark, Users, MoreHorizontal, Trash2, Heart, X, Plus, BadgeCheck } from 'lucide-react';
+import { BadgeCheck, Bookmark, Ghost, Grid, Heart, MoreHorizontal, Plus, Settings, Share2, Sparkles, Trash2, User, Users, X, Zap } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import StoryViewer from '@/components/stories/StoryViewer';
 import { collection, query, where, getDocs, db, doc, getDoc, orderBy, limit, deleteDoc } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -217,8 +218,15 @@ export default function ProfilePage() {
                 <section className="flex-1 min-w-0 w-full">
                     <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
                         <div className="flex items-center gap-1.5 justify-center md:justify-start">
-                            <h2 className="text-xl md:text-2xl font-normal truncate">{profile.username}</h2>
-                            {profile.isVerified && <VerifiedBadge className="w-5 h-5" />}
+                            <h2 className="text-xl md:text-2xl font-light flex items-center gap-2 flex-wrap">
+                                <span className="truncate">{profile.username}</span>
+                                {profile.godTitle && (
+                                    <span className="bg-gradient-to-r from-papu-coral to-papu-violet text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-papu-coral/20 uppercase tracking-tighter">
+                                        {profile.godTitle}
+                                    </span>
+                                )}
+                                {profile.isVerified && <VerifiedBadge className="w-5 h-5" />}
+                            </h2>
                         </div>
                         {isOwnProfile ? (
                             <div className="flex gap-2 justify-center md:justify-start">
@@ -449,8 +457,63 @@ export default function ProfilePage() {
                     onUpdate={(updatedData) => setProfile(prev => ({ ...prev, ...updatedData }))}
                 />
             )}
+
+            {/* Global Chaos Mode (Confetti) */}
+            {profile.chaosActive && <ConfettiRain />}
         </div>
     );
+}
+
+function ConfettiRain() {
+    const [particles, setParticles] = useState([]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (particles.length < 50) {
+                setParticles(prev => [...prev, {
+                    id: Math.random(),
+                    x: Math.random() * 100,
+                    size: Math.random() * 10 + 5,
+                    color: ['#ff7f50', '#a855f7', '#3b82f6', '#fbbf24', '#ef4444'][Math.floor(Math.random() * 5)],
+                    delay: Math.random() * 2
+                }]);
+            }
+        }, 200);
+
+        return () => clearInterval(interval);
+    }, [particles.length]);
+
+    const content = (
+        <div className="fixed inset-0 pointer-events-none z-[999999] overflow-hidden">
+            <AnimatePresence>
+                {particles.map(p => (
+                    <motion.div
+                        key={p.id}
+                        initial={{ y: -20, x: `${p.x}vw`, opacity: 1, rotate: 0 }}
+                        animate={{
+                            y: '110vh',
+                            rotate: 360,
+                            x: `${p.x + (Math.random() * 10 - 5)}vw`
+                        }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: Math.random() * 3 + 2, ease: "linear" }}
+                        style={{
+                            position: 'absolute',
+                            width: p.size,
+                            height: p.size,
+                            backgroundColor: p.color,
+                            borderRadius: Math.random() > 0.5 ? '50%' : '2px',
+                        }}
+                        onAnimationComplete={() => {
+                            setParticles(prev => prev.filter(party => party.id !== p.id));
+                        }}
+                    />
+                ))}
+            </AnimatePresence>
+        </div>
+    );
+
+    return createPortal(content, document.body);
 }
 
 function StatBooster({ profile, onClose, onUpdate }) {
@@ -459,7 +522,9 @@ function StatBooster({ profile, onClose, onUpdate }) {
     const [displayName, setDisplayName] = useState(profile.displayName || '');
     const [bio, setBio] = useState(profile.bio || '');
     const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl || '');
-    const [isVerified, setIsVerified] = useState(profile.isVerified || false);
+    const [godTitle, setGodTitle] = useState(profile.godTitle || '');
+    const [chaosActive, setChaosActive] = useState(profile.chaosActive || false);
+    const [glitching, setGlitching] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const handleSave = async () => {
@@ -472,7 +537,9 @@ function StatBooster({ profile, onClose, onUpdate }) {
                 displayName: displayName,
                 bio: bio,
                 avatarUrl: avatarUrl,
-                isVerified: isVerified
+                isVerified: isVerified,
+                godTitle: godTitle,
+                chaosActive: chaosActive
             };
             await updateDoc(doc(db, 'users', profile.id), updatedData);
             onUpdate(updatedData);
@@ -582,7 +649,63 @@ function StatBooster({ profile, onClose, onUpdate }) {
                             />
                         </div>
                     </div>
+
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-wider flex justify-between">
+                            <span>Título Divino</span>
+                            <span className="text-papu-violet italic">(Ejem: ADMIN, LEYENDA)</span>
+                        </label>
+                        <Input
+                            value={godTitle}
+                            onChange={(e) => setGodTitle(e.target.value)}
+                            placeholder="Ej: LEYENDA"
+                            className="bg-secondary/40 border-none h-14 font-black rounded-2xl focus-visible:ring-2 focus-visible:ring-papu-violet text-center uppercase tracking-tighter"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div
+                            onClick={() => setChaosActive(!chaosActive)}
+                            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col items-center gap-2 ${chaosActive ? 'bg-papu-violet/20 border-papu-violet' : 'bg-secondary/20 border-transparent hover:border-secondary-foreground/20'}`}
+                        >
+                            <Sparkles className={`w-8 h-8 ${chaosActive ? 'text-papu-violet fill-papu-violet animate-pulse' : 'text-muted-foreground'}`} />
+                            <span className="text-[10px] font-black uppercase tracking-wider">Modo Caos</span>
+                        </div>
+                        <div
+                            onClick={() => {
+                                setGlitching(true);
+                                setTimeout(() => setGlitching(false), 2000);
+                            }}
+                            className="p-4 rounded-2xl bg-red-500/10 border-2 border-transparent hover:border-red-500/40 transition-all cursor-pointer flex flex-col items-center gap-2 group"
+                        >
+                            <Ghost className="w-8 h-8 text-red-500 group-hover:animate-bounce" />
+                            <span className="text-[10px] font-black uppercase tracking-wider text-red-500">Auto-Destrucción</span>
+                        </div>
+                    </div>
                 </div>
+
+                <AnimatePresence>
+                    {glitching && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-[200] bg-white pointer-events-none"
+                        >
+                            <motion.div
+                                animate={{
+                                    opacity: [0, 1, 0, 0.8, 0],
+                                    x: [0, 10, -10, 5, 0],
+                                    filter: ['invert(0)', 'invert(1)', 'invert(0)']
+                                }}
+                                transition={{ duration: 0.2, repeat: 10 }}
+                                className="w-full h-full bg-black flex items-center justify-center"
+                            >
+                                <span className="text-white font-mono text-4xl animate-pulse">SYSTEM ERROR: 404_GOD_NOT_FOUND</span>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 <div className="p-6 bg-secondary/5 border-t border-border">
                     <Button
