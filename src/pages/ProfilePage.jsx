@@ -6,6 +6,7 @@ import { collection, query, where, getDocs, db, doc, getDoc, orderBy, limit, del
 import { useAuth } from '@/context/AuthContext';
 import { useFollow } from '@/hooks/useFollow';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import PostModal from '@/components/posts/PostModal';
 
@@ -454,6 +455,9 @@ export default function ProfilePage() {
 function StatBooster({ profile, onClose, onUpdate }) {
     const [followers, setFollowers] = useState(profile.followers || 0);
     const [following, setFollowing] = useState(profile.following || 0);
+    const [displayName, setDisplayName] = useState(profile.displayName || '');
+    const [bio, setBio] = useState(profile.bio || '');
+    const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl || '');
     const [isVerified, setIsVerified] = useState(profile.isVerified || false);
     const [loading, setLoading] = useState(false);
 
@@ -461,12 +465,16 @@ function StatBooster({ profile, onClose, onUpdate }) {
         setLoading(true);
         try {
             const { updateDoc, doc } = await import('firebase/firestore');
-            await updateDoc(doc(db, 'users', profile.id), {
+            const updatedData = {
                 followers: Number(followers),
                 following: Number(following),
+                displayName: displayName,
+                bio: bio,
+                avatarUrl: avatarUrl,
                 isVerified: isVerified
-            });
-            onUpdate({ followers: Number(followers), following: Number(following), isVerified });
+            };
+            await updateDoc(doc(db, 'users', profile.id), updatedData);
+            onUpdate(updatedData);
             onClose();
         } catch (e) {
             console.error(e);
@@ -477,57 +485,107 @@ function StatBooster({ profile, onClose, onUpdate }) {
     };
 
     return (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
             <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="bg-background w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-border p-6"
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                className="bg-background w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl border border-border flex flex-col max-h-[90vh]"
             >
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-bold text-lg">Modo Dios ⚡</h3>
-                    <button onClick={onClose}><X className="h-5 w-5" /></button>
+                <div className="p-6 border-b border-border flex justify-between items-center bg-secondary/20">
+                    <div>
+                        <h3 className="font-black text-2xl italic tracking-tighter text-papu-coral">MODO DIOS ⚡</h3>
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Hacker Control Panel</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-secondary rounded-full transition-colors">
+                        <X className="h-6 w-6" />
+                    </button>
                 </div>
 
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Seguidores</label>
-                        <Input
-                            type="number"
-                            value={followers}
-                            onChange={(e) => setFollowers(e.target.value)}
-                            className="bg-secondary/50 border-none h-12 text-lg font-bold"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Seguidos</label>
-                        <Input
-                            type="number"
-                            value={following}
-                            onChange={(e) => setFollowing(e.target.value)}
-                            className="bg-secondary/50 border-none h-12 text-lg font-bold"
-                        />
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-xl">
-                        <div className="flex items-center gap-2">
-                            <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-500 stroke-background" />
-                            <span className="font-semibold">Verificado</span>
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-wider">Seguidores</label>
+                            <Input
+                                type="number"
+                                value={followers}
+                                onChange={(e) => setFollowers(e.target.value)}
+                                className="bg-secondary/40 border-none h-14 text-xl font-black rounded-2xl focus-visible:ring-2 focus-visible:ring-papu-coral"
+                            />
                         </div>
-                        <input
-                            type="checkbox"
-                            checked={isVerified}
-                            onChange={(e) => setIsVerified(e.target.checked)}
-                            className="w-5 h-5 accent-blue-500"
-                        />
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-wider">Seguidos</label>
+                            <Input
+                                type="number"
+                                value={following}
+                                onChange={(e) => setFollowing(e.target.value)}
+                                className="bg-secondary/40 border-none h-14 text-xl font-black rounded-2xl focus-visible:ring-2 focus-visible:ring-papu-coral"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-5 pt-2 border-t border-border/50">
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-wider">Display Name</label>
+                            <Input
+                                value={displayName}
+                                onChange={(e) => setDisplayName(e.target.value)}
+                                placeholder="Nombre visible..."
+                                className="bg-secondary/40 border-none h-14 font-bold rounded-2xl focus-visible:ring-2 focus-visible:ring-papu-coral text-lg"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-wider">Bio (Multi-line)</label>
+                            <textarea
+                                value={bio}
+                                onChange={(e) => setBio(e.target.value)}
+                                className="w-full bg-secondary/40 border-none rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-papu-coral focus:outline-none min-h-[100px] resize-none"
+                                placeholder="Tu biografía de leyenda..."
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-wider">Avatar Direct URL</label>
+                            <Input
+                                value={avatarUrl}
+                                onChange={(e) => setAvatarUrl(e.target.value)}
+                                placeholder="https://i.imgur.com/..."
+                                className="bg-secondary/40 border-none h-14 text-xs font-mono rounded-2xl focus-visible:ring-2 focus-visible:ring-papu-coral"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-5 bg-blue-500/10 rounded-[24px] border border-blue-500/20 group hover:bg-blue-500/15 transition-all">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-blue-500 p-2.5 rounded-xl shadow-lg shadow-blue-500/30">
+                                <BadgeCheck className="w-6 h-6 text-white fill-white" strokeWidth={3} />
+                            </div>
+                            <div>
+                                <span className="font-black text-base block leading-none tracking-tight">VERIFICADO</span>
+                                <span className="text-[9px] text-blue-500 font-black uppercase tracking-widest mt-1 block">Status Oficial</span>
+                            </div>
+                        </div>
+                        <div
+                            onClick={() => setIsVerified(!isVerified)}
+                            className={`w-14 h-8 rounded-full p-1.5 cursor-pointer transition-all duration-300 shadow-inner ${isVerified ? 'bg-blue-500' : 'bg-zinc-700'}`}
+                        >
+                            <motion.div
+                                animate={{ x: isVerified ? 24 : 0 }}
+                                className="w-5 h-5 bg-white rounded-full shadow-md"
+                            />
+                        </div>
                     </div>
                 </div>
 
-                <Button
-                    className="w-full mt-8 h-12 font-bold bg-papu-coral hover:bg-papu-coral/90"
-                    onClick={handleSave}
-                    disabled={loading}
-                >
-                    {loading ? 'Aplicando hack...' : '¡Hacerme famoso!'}
-                </Button>
+                <div className="p-6 bg-secondary/5 border-t border-border">
+                    <Button
+                        className="w-full h-16 font-black text-xl italic bg-papu-coral hover:bg-papu-coral/90 rounded-2xl shadow-xl shadow-papu-coral/20 transition-all active:scale-[0.97]"
+                        onClick={handleSave}
+                        disabled={loading}
+                    >
+                        {loading ? 'MODIFICANDO EL SISTEMA...' : 'GUARDAR CAMBIOS GOD ⚡'}
+                    </Button>
+                </div>
             </motion.div>
         </div>
     );
