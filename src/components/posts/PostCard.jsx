@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { MessageCircle, Send, Bookmark, MoreHorizontal, Heart, User, BarChart3 } from 'lucide-react';
+import { MessageCircle, Send, Bookmark, MoreHorizontal, Heart, User, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import LikeButton from './LikeButton';
 import PollOption from './PollOption';
 import {
@@ -50,6 +50,9 @@ export default function PostCard({ post }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [sharing, setSharing] = useState(false);
+    const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
+    const carouselRef = useRef(null);
+    const videoRefs = useRef({});
     const lastTap = useRef(0);
 
     // Parse timestamp
@@ -273,6 +276,44 @@ export default function PostCard({ post }) {
         }
     };
 
+    const handleScroll = () => {
+        if (carouselRef.current) {
+            const index = Math.round(carouselRef.current.scrollLeft / carouselRef.current.offsetWidth);
+            setCurrentMediaIndex(index);
+        }
+    };
+
+    const scrollCarousel = (direction) => {
+        if (carouselRef.current) {
+            const width = carouselRef.current.offsetWidth;
+            const newScrollLeft = carouselRef.current.scrollLeft + (direction === 'next' ? width : -width);
+            carouselRef.current.scrollTo({ left: newScrollLeft, behavior: 'smooth' });
+        }
+    };
+
+    // Intersection observer for videos
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    const video = entry.target;
+                    if (entry.isIntersecting) {
+                        video.play().catch(() => { }); // Autoplay if possible
+                    } else {
+                        video.pause();
+                    }
+                });
+            },
+            { threshold: 0.6 }
+        );
+
+        Object.values(videoRefs.current).forEach((video) => {
+            if (video) observer.observe(video);
+        });
+
+        return () => observer.disconnect();
+    }, [post.media]);
+
     // Search Users for Share
     useEffect(() => {
         if (!showShareDialog) return;
@@ -372,27 +413,77 @@ export default function PostCard({ post }) {
                 </DropdownMenu>
             </div>
 
-            {/* Image */}
-            {post.image ? (
-                <div
-                    className="relative aspect-square bg-secondary cursor-pointer overflow-hidden"
-                    onClick={handleDoubleTap}
-                >
-                    <motion.img
-                        src={post.image}
-                        alt={post.caption}
-                        className="w-full h-full object-cover"
-                        initial={{ opacity: 0, scale: 1.05 }}
-                        animate={imageLoaded ? { opacity: 1, scale: 1 } : {}}
-                        transition={{ duration: 0.6, ease: 'easeOut' }}
-                        onLoad={() => setImageLoaded(true)}
-                    />
+            {/* Carousel / Media */}
+            {(post.media && post.media.length > 0) || post.image ? (
+                <div className="relative aspect-square bg-secondary cursor-pointer overflow-hidden">
+                    <div
+                        ref={carouselRef}
+                        onScroll={handleScroll}
+                        className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide w-full h-full"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                        onClick={handleDoubleTap}
+                    >
+                        {(post.media || [{ url: post.image, type: 'image' }]).map((item, idx) => (
+                            <div key={idx} className="flex-shrink-0 w-full h-full snap-center relative">
+                                {item.type === 'video' || item.url?.startsWith('data:video') ? (
+                                    <video
+                                        ref={el => videoRefs.current[idx] = el}
+                                        src={item.url}
+                                        loop
+                                        muted
+                                        playsInline
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <motion.img
+                                        src={item.url}
+                                        className="w-full h-full object-cover"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ duration: 0.3 }}
+                                    />
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Navigation Arrows */}
+                    {post.media && post.media.length > 1 && (
+                        <>
+                            {currentMediaIndex > 0 && (
+                                <button
+                                    onClick={() => scrollCarousel('prev')}
+                                    className="absolute left-2 top-1/2 -translate-y-1/2 p-1 bg-black/40 hover:bg-black/60 text-white rounded-full transition-all z-20"
+                                >
+                                    <ChevronLeft className="w-5 h-5" />
+                                </button>
+                            )}
+                            {currentMediaIndex < post.media.length - 1 && (
+                                <button
+                                    onClick={() => scrollCarousel('next')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 bg-black/40 hover:bg-black/60 text-white rounded-full transition-all z-20"
+                                >
+                                    <ChevronRight className="w-5 h-5" />
+                                </button>
+                            )}
+                            {/* Indicators */}
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-20 bg-black/20 px-2 py-1 rounded-full backdrop-blur-sm">
+                                {post.media.map((_, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${idx === currentMediaIndex ? 'bg-white scale-125' : 'bg-white/40'
+                                            }`}
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    )}
 
                     {/* Floating heart on double tap */}
                     <AnimatePresence>
                         {showFloatingHeart && (
                             <motion.div
-                                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                                className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
@@ -412,7 +503,7 @@ export default function PostCard({ post }) {
 
                     {/* Tags Overlay Logic */}
                     {post.taggedUsers && post.taggedUsers.length > 0 && (
-                        <div className="absolute bottom-4 left-4 z-10">
+                        <div className="absolute bottom-4 left-4 z-30">
                             <button
                                 onClick={(e) => { e.stopPropagation(); setShowTags(!showTags); }}
                                 className="bg-black/60 p-1.5 rounded-full text-white/90 hover:bg-black/80 transition-colors"
@@ -423,12 +514,12 @@ export default function PostCard({ post }) {
                     )}
 
                     <AnimatePresence>
-                        {showTags && post.taggedUsers && (
+                        {showTags && (
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
-                                className="absolute inset-0 bg-black/40 z-20 flex items-center justify-center pointer-events-none"
+                                className="absolute inset-0 bg-black/40 z-40 flex items-center justify-center pointer-events-none"
                             >
                                 <div className="flex flex-wrap gap-2 justify-center p-8 pointer-events-auto">
                                     {post.taggedUsers.map(tag => (

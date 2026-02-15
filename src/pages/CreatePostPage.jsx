@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ImagePlus, X, ArrowLeft, UserPlus, Search, User, BarChart3 } from 'lucide-react';
+import { ImagePlus, X, ArrowLeft, UserPlus, Search, User, BarChart3, Play } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { compressImage } from '@/lib/imageUtils';
 import { db, collection, addDoc, serverTimestamp } from '@/lib/firebase';
@@ -16,7 +16,7 @@ export default function CreatePostPage() {
     const { currentUser, userProfile } = useAuth();
     const navigate = useNavigate();
 
-    const [image, setImage] = useState(null);
+    const [mediaFiles, setMediaFiles] = useState([]); // Array of {url, type}
     const [caption, setCaption] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -87,19 +87,53 @@ export default function CreatePostPage() {
     // better: use `React.useEffect` if React is default imported? No.
     // I will update line 1 in a separate chunk.
 
-    const handleFile = async (file) => {
-        if (file && file.type.startsWith('image/')) {
-            try {
-                const compressed = await compressImage(file);
-                setImage(compressed);
-                setError('');
-            } catch (error) {
-                console.error("Error compressing image:", error);
-                setError("Error al procesar la imagen");
-            }
-        } else {
-            setError("Por favor seleccioná una imagen válida");
+    const handleFiles = async (files) => {
+        if (!files) return;
+        const fileList = Array.from(files);
+
+        if (mediaFiles.length + fileList.length > 6) {
+            setError("Máximo 6 archivos por publicación");
+            return;
         }
+
+        setLoading(true);
+        setError('');
+
+        try {
+            const processedFiles = await Promise.all(fileList.map(async (file) => {
+                if (file.type.startsWith('image/')) {
+                    // Aggressive compression for carousels (max 600px, 0.5 quality)
+                    const compressed = await compressImage(file, 600, 0.5);
+                    return { url: compressed, type: 'image' };
+                } else if (file.type.startsWith('video/')) {
+                    // Convert video to base64
+                    // WARNING: base64 videos are huge. This only works for tiny clips.
+                    if (file.size > 2 * 1024 * 1024) { // 2MB limit for the raw file before base64
+                        throw new Error("El video es muy pesado. Intentá con uno de menos de 2MB.");
+                    }
+                    const base64 = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                    return { url: base64, type: 'video' };
+                }
+                return null;
+            }));
+
+            const validFiles = processedFiles.filter(f => f !== null);
+            setMediaFiles(prev => [...prev, ...validFiles]);
+        } catch (err) {
+            console.error("Error processing files:", err);
+            setError(err.message || "Error al procesar los archivos");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const removeMedia = (index) => {
+        setMediaFiles(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleDrag = (e) => {
@@ -116,8 +150,8 @@ export default function CreatePostPage() {
         e.preventDefault();
         e.stopPropagation();
         setDragActive(false);
-        const file = e.dataTransfer?.files?.[0];
-        await handleFile(file);
+        const files = e.dataTransfer?.files;
+        await handleFiles(files);
     };
 
     // Poll Helper Functions
@@ -156,13 +190,21 @@ export default function CreatePostPage() {
                 throw new Error("Perfil de usuario no cargado. Intentá recargar la página.");
             }
 
+            // Estimate total size
+            const totalSize = JSON.stringify(mediaFiles).length;
+            if (totalSize > 900000) { // Close to 1MB Firestore limit
+                throw new Error("La publicación es demasiado pesada para Firestore. Intentá con menos fotos o videos más cortos.");
+            }
+
             const postData = {
                 userId: currentUser.uid,
                 user: {
                     username: userProfile.username || 'usuario',
                     avatar: userProfile.avatarUrl || '',
                 },
-                image: image || null,
+                // For backward compatibility we keep 'image' as the first media component
+                image: mediaFiles.length > 0 ? mediaFiles[0].url : null,
+                media: mediaFiles, // All media (carousel)
                 caption: caption,
                 likes: 0,
                 comments: [],
@@ -205,7 +247,7 @@ export default function CreatePostPage() {
                 <h1 className="text-lg font-semibold">Nueva publicación</h1>
                 <Button
                     onClick={handleSubmit}
-                    disabled={(!image && !showPoll) || loading}
+                    disabled={(mediaFiles.length === 0 && !showPoll) || loading}
                     className="text-papu-coral hover:text-papu-coral/80 font-semibold"
                     variant="ghost"
                 >
@@ -220,7 +262,7 @@ export default function CreatePostPage() {
             )}
 
             <div className="flex-1 flex flex-col gap-6">
-                {!image ? (
+                {mediaFiles.length === 0 ? (
                     <motion.div
                         onDragEnter={handleDrag}
                         onDragOver={handleDrag}
@@ -235,28 +277,58 @@ export default function CreatePostPage() {
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept="image/*"
+                            accept="image/*,video/*"
+                            multiple
                             className="hidden"
-                            onChange={(e) => handleFile(e.target.files?.[0])}
+                            onChange={(e) => handleFiles(e.target.files)}
                         />
                         <div className="bg-secondary rounded-full p-4">
                             <ImagePlus className="h-8 w-8 text-muted-foreground" />
                         </div>
-                        <p className="text-muted-foreground font-medium">
-                            Toca para seleccionar una foto
+                        <p className="text-muted-foreground font-medium text-center px-4">
+                            Arrastra o toca para seleccionar fotos y videos (hasta 6)
                         </p>
                     </motion.div>
                 ) : (
                     <div className="space-y-4">
-                        <div className="relative aspect-square bg-secondary rounded-xl overflow-hidden shadow-sm">
-                            <img src={image} alt="Preview" className="w-full h-full object-cover" />
-                            <button
-                                onClick={() => setImage(null)}
-                                className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
-                                disabled={loading}
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
+                        {/* Selected Media Grid/Preview */}
+                        <div className="grid grid-cols-2 gap-2">
+                            {mediaFiles.map((file, index) => (
+                                <div key={index} className="relative aspect-square bg-secondary rounded-xl overflow-hidden shadow-sm group">
+                                    {file.type === 'image' ? (
+                                        <img src={file.url} alt="Preview" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full bg-black flex items-center justify-center relative">
+                                            <video src={file.url} className="w-full h-full object-cover opacity-60" />
+                                            <Play className="absolute h-8 w-8 text-white fill-white" />
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={() => removeMedia(index)}
+                                        className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors opacity-0 group-hover:opacity-100"
+                                        disabled={loading}
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </div>
+                            ))}
+                            {mediaFiles.length < 6 && (
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="aspect-square border-2 border-dashed border-border rounded-xl flex items-center justify-center hover:bg-secondary/20 transition-colors"
+                                    disabled={loading}
+                                >
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*,video/*"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(e) => handleFiles(e.target.files)}
+                                    />
+                                    <ImagePlus className="h-6 w-6 text-muted-foreground" />
+                                </button>
+                            )}
                         </div>
 
                         <div className="flex gap-3">
