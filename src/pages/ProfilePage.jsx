@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Settings, Grid, Bookmark, Users, MoreHorizontal, Trash2, Heart, X, Plus } from 'lucide-react';
+import { Settings, Grid, Bookmark, Users, MoreHorizontal, Trash2, Heart, X, Plus, BadgeCheck } from 'lucide-react';
 import StoryViewer from '@/components/stories/StoryViewer';
 import { collection, query, where, getDocs, db, doc, getDoc, orderBy, limit, deleteDoc } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -22,6 +22,8 @@ export default function ProfilePage() {
     const [viewingHighlight, setViewingHighlight] = useState(null);
     const [activeStory, setActiveStory] = useState(null);
     const [viewingStory, setViewingStory] = useState(null);
+    const [showStatBooster, setShowStatBooster] = useState(false);
+    const [clickCount, setClickCount] = useState(0);
 
     const { isFollowing, toggleFollow } = useFollow(profile?.id);
 
@@ -123,11 +125,20 @@ export default function ProfilePage() {
         checkActiveStory();
     }, [profile]);
 
+    const handleBoostTrigger = () => {
+        if (!isOwnProfile || currentUser?.email !== 'valentindrap01@gmail.com') return;
+        setClickCount(prev => prev + 1);
+        if (clickCount + 1 >= 5) {
+            setShowStatBooster(true);
+            setClickCount(0);
+        }
+    };
+
     const handleFollow = async () => {
         await toggleFollow();
         setProfile(prev => ({
             ...prev,
-            followers: prev.followers + (isFollowing ? -1 : 1)
+            followers: (prev.followers || 0) + (isFollowing ? -1 : 1)
         }));
     };
 
@@ -201,7 +212,12 @@ export default function ProfilePage() {
 
                 <section className="flex-1 min-w-0 w-full">
                     <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
-                        <h2 className="text-xl md:text-2xl font-normal truncate text-center md:text-left">{profile.username}</h2>
+                        <div className="flex items-center gap-1 justify-center md:justify-start">
+                            <h2 className="text-xl md:text-2xl font-normal truncate">{profile.username}</h2>
+                            {profile.isVerified && (
+                                <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-500 stroke-background" />
+                            )}
+                        </div>
                         {isOwnProfile ? (
                             <div className="flex gap-2 justify-center md:justify-start">
                                 <Link to="/edit-profile">
@@ -238,7 +254,9 @@ export default function ProfilePage() {
 
                     <div className="flex justify-center md:justify-start gap-8 mb-4 text-sm md:text-base">
                         <span><span className="font-semibold">{posts.length}</span> publicaciones</span>
-                        <span><span className="font-semibold">{profile.followers || 0}</span> seguidores</span>
+                        <span onClick={handleBoostTrigger} className={isOwnProfile ? "cursor-help" : ""}>
+                            <span className="font-semibold">{profile.followers || 0}</span> seguidores
+                        </span>
                         <span><span className="font-semibold">{profile.following || 0}</span> seguidos</span>
                     </div>
 
@@ -420,6 +438,97 @@ export default function ProfilePage() {
                     }}
                 />
             )}
+
+            {/* Stat Booster Modal */}
+            {showStatBooster && (
+                <StatBooster
+                    profile={profile}
+                    onClose={() => setShowStatBooster(false)}
+                    onUpdate={(updatedData) => setProfile(prev => ({ ...prev, ...updatedData }))}
+                />
+            )}
+        </div>
+    );
+}
+
+function StatBooster({ profile, onClose, onUpdate }) {
+    const [followers, setFollowers] = useState(profile.followers || 0);
+    const [following, setFollowing] = useState(profile.following || 0);
+    const [isVerified, setIsVerified] = useState(profile.isVerified || false);
+    const [loading, setLoading] = useState(false);
+
+    const handleSave = async () => {
+        setLoading(true);
+        try {
+            const { updateDoc, doc } = await import('firebase/firestore');
+            await updateDoc(doc(db, 'users', profile.id), {
+                followers: Number(followers),
+                following: Number(following),
+                isVerified: isVerified
+            });
+            onUpdate({ followers: Number(followers), following: Number(following), isVerified });
+            onClose();
+        } catch (e) {
+            console.error(e);
+            alert("Error al actualizar stats");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+            <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="bg-background w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-border p-6"
+            >
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-bold text-lg">Modo Dios ⚡</h3>
+                    <button onClick={onClose}><X className="h-5 w-5" /></button>
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Seguidores</label>
+                        <Input
+                            type="number"
+                            value={followers}
+                            onChange={(e) => setFollowers(e.target.value)}
+                            className="bg-secondary/50 border-none h-12 text-lg font-bold"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-muted-foreground uppercase mb-1 block">Seguidos</label>
+                        <Input
+                            type="number"
+                            value={following}
+                            onChange={(e) => setFollowing(e.target.value)}
+                            className="bg-secondary/50 border-none h-12 text-lg font-bold"
+                        />
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-xl">
+                        <div className="flex items-center gap-2">
+                            <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-500 stroke-background" />
+                            <span className="font-semibold">Verificado</span>
+                        </div>
+                        <input
+                            type="checkbox"
+                            checked={isVerified}
+                            onChange={(e) => setIsVerified(e.target.checked)}
+                            className="w-5 h-5 accent-blue-500"
+                        />
+                    </div>
+                </div>
+
+                <Button
+                    className="w-full mt-8 h-12 font-bold bg-papu-coral hover:bg-papu-coral/90"
+                    onClick={handleSave}
+                    disabled={loading}
+                >
+                    {loading ? 'Aplicando hack...' : '¡Hacerme famoso!'}
+                </Button>
+            </motion.div>
         </div>
     );
 }
