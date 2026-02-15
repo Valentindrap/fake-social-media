@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, Grid, Bookmark, Users, MoreHorizontal, Trash2, Heart, X, Plus, BadgeCheck } from 'lucide-react';
 import StoryViewer from '@/components/stories/StoryViewer';
 import { collection, query, where, getDocs, db, doc, getDoc, orderBy, limit, deleteDoc } from '@/lib/firebase';
